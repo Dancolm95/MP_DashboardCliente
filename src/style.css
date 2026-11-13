@@ -460,7 +460,7 @@ p {
   display: block;
 }
 
-.chart-card,.table-card,.upload-card,.guide-card,.users-card,.create-card {
+.chart-card,.table-card,.upload-card,.users-card,.create-card {
   background: #fff;
   border: 1px solid #e8edf3;
   border-radius: 14px;
@@ -674,13 +674,17 @@ tr:last-child td {
 }
 
 /* Upload and user administration */
-.upload-layout,.users-layout {
+.upload-layout {
+  max-width: 700px;
+}
+
+.users-layout {
   display: grid;
   grid-template-columns: minmax(0,1.35fr) minmax(290px,.85fr);
   gap: 20px;
 }
 
-.upload-card,.guide-card,.users-card,.create-card {
+.upload-card,.users-card,.create-card {
   padding: 25px;
 }
 
@@ -791,49 +795,6 @@ tr:last-child td {
 .upload-submit {
   margin-top: 20px;
   width: 100%;
-}
-
-.guide-icon {
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border-radius: 11px;
-  background: #e9f1ff;
-  color: #2c6bd9;
-  margin-bottom: 18px;
-}
-
-.guide-card>p {
-  font-size: 12px;
-  margin-top: 9px;
-}
-
-.guide-list {
-  display: grid;
-  gap: 17px;
-  margin: 26px 0;
-}
-
-.guide-list div {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #5e6e84;
-  font-size: 12px;
-}
-
-.guide-list span {
-  width: 21px;
-  height: 21px;
-  flex: none;
-  border-radius: 50%;
-  background: #edf4ff;
-  color: #3b70cf;
-  font-size: 10px;
-  font-weight: 800;
-  display: grid;
-  place-items: center;
 }
 
 .outline {
@@ -1348,7 +1309,7 @@ tr:last-child td {
   .chart-wrap {
     height: 240px;
   }
-  .upload-layout,.users-layout {
+  .users-layout {
     grid-template-columns: 1fr;
   }
   .login-layout {

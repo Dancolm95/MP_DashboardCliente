@@ -5,7 +5,7 @@ const group = (rows, field) => [...rows.reduce((map, row) => {
   if (!map.has(name)) map.set(name, []);
   map.get(name).push(row);
   return map;
-}, new Map())].map(([name, items]) => ({ name, received: sum(items, 'received'), inspected: sum(items, 'inspected'), approved: sum(items, 'approved'), rejected: sum(items, 'rejected'), waste: sum(items, 'waste') })).sort((a, b) => b.inspected - a.inspected);
+}, new Map())].map(([name, items]) => ({ name, received: sum(items, 'received'), pendingStart: sum(items, 'pendingStart'), inspected: sum(items, 'inspected'), approved: sum(items, 'approved'), rejected: sum(items, 'rejected'), waste: sum(items, 'waste') })).sort((a, b) => b.inspected - a.inspected);
 
 export function buildDashboard(allRecords, allIncidents, { shift = '', product = '' } = {}) {
   const records = allRecords.filter(record => (!shift || record.shift === shift) && (!product || record.product === product));

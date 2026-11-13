@@ -51,7 +51,7 @@ test('login, importación de tres hojas, filtros, incidencias y duplicados', asy
     const upload = cookie => request('/uploads', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'X-File-Name': 'control.xlsx' }, body: xlsx });
     assert.equal((await upload(viewer)).status, 403);
     assert.equal((await request('/users', { headers: { Cookie: viewer } })).status, 403);
-    assert.equal((await request('/template', { headers: { Cookie: viewer } })).status, 403);
+    assert.equal((await request('/template', { headers: { Cookie: admin } })).status, 404);
     const added = await upload(admin);
     assert.equal(added.status, 201);
     const result = await added.json();
@@ -63,6 +63,10 @@ test('login, importación de tres hojas, filtros, incidencias y duplicados', asy
     assert.equal(dashboard.summary.inspected, 27);
     assert.equal(dashboard.summary.pendingEnd, 3);
     assert.equal(dashboard.incidents.length, 2);
+    assert.deepEqual(dashboard.byShift.map(({ name, received, pendingStart, inspected }) => ({ name, received, pendingStart, inspected })), [
+      { name: 'Día', received: 20, pendingStart: 0, inspected: 15 },
+      { name: 'Tarde', received: 10, pendingStart: 5, inspected: 12 },
+    ]);
     const filtered = await request('/dashboard?from=2026-11-01&to=2026-11-30&shift=D%C3%ADa&product=Vajillas', { headers: { Cookie: viewer } }).then(r => r.json());
     assert.equal(filtered.summary.received, 20);
     assert.equal(filtered.summary.pendingEnd, 3);

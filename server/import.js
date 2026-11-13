@@ -1,4 +1,3 @@
-import ExcelJS from 'exceljs';
 import { readWorkbook } from './xlsx.js';
 
 const fail = (message) => { const error = new Error(message); error.status = 400; throw error; };
@@ -71,20 +70,4 @@ export async function parseQualityWorkbook(buffer) {
   const totals = { 'Cajas recibidas': records.reduce((n, r) => n + r.received, 0), 'Cajas inspeccionadas': records.reduce((n, r) => n + r.inspected, 0), 'Cajas aprobadas': records.reduce((n, r) => n + r.approved, 0), 'Cajas rechazadas': records.reduce((n, r) => n + r.rejected, 0), 'Cajas con merma (informativo)': records.reduce((n, r) => n + r.waste, 0) };
   const warnings = Object.entries(totals).filter(([label, value]) => Number.isFinite(sourceTotals[label]) && Math.abs(sourceTotals[label] - value) > 0.01).map(([label, value]) => `${label}: detalle ${value}, resumen ${sourceTotals[label]}.`);
   return { records, incidents, warnings };
-}
-
-export async function createTemplate() {
-  const workbook = new ExcelJS.Workbook();
-  const control = workbook.addWorksheet('CONTROL_DIARIO');
-  control.addRow(['Fecha', 'Turno', 'Lote / referencia', 'Producto', 'Cajas recibidas', 'Pendientes iniciales', 'Cajas disponibles', 'Cajas inspeccionadas', 'Cajas aprobadas', 'Cajas rechazadas', 'Cajas con merma*', 'Pendientes finales', '% cumplimiento', '% aprobación', '% rechazo', 'Personal asignado', 'Horas efectivas / persona', 'Cajas / hora-persona', 'Control balance**', 'Observaciones']);
-  const incidents = workbook.addWorksheet('INCIDENCIAS');
-  incidents.addRow(['Fecha', 'Lote / referencia', 'Producto', 'Tipo de defecto', 'Cajas afectadas', 'Acción / destino', 'Observación', 'Responsable']);
-  const summary = workbook.addWorksheet('RESUMEN_KPI');
-  summary.addRow(['Indicador', 'Valor', 'Definición / interpretación']);
-  for (const sheet of workbook.worksheets) {
-    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF174276' } };
-    sheet.columns.forEach(column => { column.width = 22; });
-  }
-  return workbook.xlsx.writeBuffer();
 }

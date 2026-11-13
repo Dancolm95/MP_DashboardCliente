@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { DuplicateRecordError } from './db/index.js';
 import { hashPassword, verifyPassword, newSessionToken, tokenHash, publicUser } from './security.js';
-import { parseQualityWorkbook, createTemplate } from './import.js';
+import { parseQualityWorkbook } from './import.js';
 import { buildDashboard } from './quality.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -71,12 +71,6 @@ export function createApp(repo) {
     try { await repo.createUser(user); }
     catch (error) { if (error.message?.includes('UNIQUE') || error.errorNum === 1) bad('Ya existe una cuenta con ese correo.', 409); throw error; }
     res.status(201).json({ user: publicUser(user) });
-  }));
-  app.get('/api/template', requireAuth, requireAdmin, asyncRoute(async (_req, res) => {
-    const buffer = await createTemplate();
-    res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="plantilla-kpis.xlsx"');
-    res.send(Buffer.from(buffer));
   }));
   app.post('/api/uploads', requireAuth, requireAdmin,
     express.raw({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', limit: '2mb' }),

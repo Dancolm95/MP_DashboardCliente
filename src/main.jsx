@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LayoutDashboard, Table2, UploadCloud, UsersRound, LogOut, Download, FileSpreadsheet, CircleCheck, AlertCircle, Menu, X, LockKeyhole, Mail, ArrowRight, Database, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Table2, UploadCloud, UsersRound, LogOut, CircleCheck, AlertCircle, Menu, X, LockKeyhole, Mail, ArrowRight, Database, ShieldCheck } from 'lucide-react';
 import './style.css';
 import { QualityContent } from './quality-dashboard.jsx';
 
@@ -89,10 +89,32 @@ function Login({ onLogin }) {
 }
 
 function UploadPage({ onSuccess }) {
-  const [file, setFile] = useState(null); const [drag, setDrag] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  async function submit() { if (!file) return; setBusy(true); setError(''); try { const data = await api('/uploads', { method: 'POST', headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'X-File-Name': file.name }, body: file }); onSuccess(`${data.recordCount} registros y ${data.incidentCount} incidencias cargados.`, data.warnings || []); } catch (err) { setError(err.message); } finally { setBusy(false); } }
-  async function download() { const response = await fetch('/api/template'); if (!response.ok) { setError('No se pudo descargar la plantilla.'); return; } const url = URL.createObjectURL(await response.blob()); const a = document.createElement('a'); a.href = url; a.download = 'plantilla-kpis.xlsx'; a.click(); URL.revokeObjectURL(url); }
-  return <><div className="page-head"><div><div className="eyebrow">ADMINISTRACIÓN DE DATOS</div><h1>Cargar control de calidad</h1><p>Importa los registros nuevos al cierre de la jornada.</p></div></div><div className="upload-layout"><div className="upload-card"><div className="section-head"><div><h2>Subir archivo Excel</h2><p>Se leerán CONTROL_DIARIO, INCIDENCIAS y RESUMEN_KPI.</p></div><div className="upload-step">01</div></div><div className={`dropzone ${drag ? 'drag' : ''}`} onDragOver={e => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={e => { e.preventDefault(); setDrag(false); setFile(e.dataTransfer.files[0] || null); setError(''); }}><input id="excel-file" type="file" accept=".xlsx" onChange={e => { setFile(e.target.files[0] || null); setError(''); }}/><label htmlFor="excel-file"><div className="drop-icon"><UploadCloud size={27}/></div><strong>{file ? file.name : 'Arrastra tu Excel aquí'}</strong><span>{file ? `${(file.size / 1024).toFixed(1)} KB · Haz clic para cambiar` : <>o <b>explora tus archivos</b> para seleccionar uno</>}</span><small>Formato .xlsx · Máximo 2 MB</small></label></div>{error && <div className="form-error"><AlertCircle size={17}/>{error}</div>}<button className="primary upload-submit" disabled={!file || busy} onClick={submit}>{busy ? 'Procesando archivo...' : <>Cargar registros <ArrowRight size={18}/></>}</button></div><div className="guide-card"><div className="guide-icon"><FileSpreadsheet size={23}/></div><h2>Prepara tu archivo</h2><p>Utiliza la estructura de las tres hojas para registrar cada fecha, turno y lote.</p><div className="guide-list"><div><span>1</span> CONTROL_DIARIO contiene las cajas y el saldo pendiente.</div><div><span>2</span> INCIDENCIAS detalla los defectos por lote.</div><div><span>3</span> RESUMEN_KPI permite contrastar los totales.</div><div><span>4</span> Sube solo registros nuevos; los duplicados se rechazan.</div></div><button className="outline" onClick={download}><Download size={17}/> Descargar estructura</button></div></div></>;
+  const [file, setFile] = useState(null);
+  const [drag, setDrag] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function submit() {
+    if (!file) return;
+    setBusy(true);
+    setError('');
+    try {
+      const data = await api('/uploads', { method: 'POST', headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'X-File-Name': file.name }, body: file });
+      onSuccess(`${data.recordCount} registros y ${data.incidentCount} incidencias cargados.`, data.warnings || []);
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+  return <>
+    <div className="page-head"><div><div className="eyebrow">ADMINISTRACIÓN DE DATOS</div><h1>Cargar control de calidad</h1><p>Importa los registros nuevos al cierre de la jornada.</p></div></div>
+    <div className="upload-layout"><div className="upload-card">
+      <div className="section-head"><div><h2>Subir archivo Excel</h2><p>Se leerán CONTROL_DIARIO, INCIDENCIAS y RESUMEN_KPI.</p></div></div>
+      <div className={`dropzone ${drag ? 'drag' : ''}`} onDragOver={e => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={e => { e.preventDefault(); setDrag(false); setFile(e.dataTransfer.files[0] || null); setError(''); }}>
+        <input id="excel-file" type="file" accept=".xlsx" onChange={e => { setFile(e.target.files[0] || null); setError(''); }}/>
+        <label htmlFor="excel-file"><div className="drop-icon"><UploadCloud size={27}/></div><strong>{file ? file.name : 'Arrastra tu Excel aquí'}</strong><span>{file ? `${(file.size / 1024).toFixed(1)} KB · Haz clic para cambiar` : <>o <b>explora tus archivos</b> para seleccionar uno</>}</span><small>Formato .xlsx · Máximo 2 MB</small></label>
+      </div>
+      {error && <div className="form-error"><AlertCircle size={17}/>{error}</div>}
+      <button className="primary upload-submit" disabled={!file || busy} onClick={submit}>{busy ? 'Procesando archivo...' : <>Cargar registros <ArrowRight size={18}/></>}</button>
+    </div></div>
+  </>;
 }
 
 function UsersPage({ setNotice }) {
