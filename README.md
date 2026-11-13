@@ -1,6 +1,6 @@
 # MP Dashboard Cliente
 
-Prototipo local de login, carga diaria de Excel y dashboard de KPIs generales. React muestra los datos; la API mantiene la lógica de acceso e importación fuera del adaptador de base de datos.
+Prototipo local del servicio de control de calidad. Usa las hojas `CONTROL_DIARIO`, `INCIDENCIAS` y `RESUMEN_KPI` de un Excel `.xlsx`. React muestra los datos; la API mantiene las reglas de acceso e importación separadas del adaptador de base de datos.
 
 ## Iniciar
 
@@ -8,20 +8,27 @@ Requiere Node.js 22.13 o superior.
 
 ```bash
 cp .env.example .env
+```
+
+Edita `.env` y reemplaza `ADMIN_PASSWORD` con una contraseña local. Después ejecuta:
+
+```bash
 npm install
 npm run seed
 npm run dev
 ```
 
-Abrir `http://127.0.0.1:5173`. Las credenciales iniciales se definen en `.env` (`ADMIN_EMAIL` y `ADMIN_PASSWORD`). Cambia la contraseña de ejemplo antes de compartir el prototipo. `npm run seed` crea 14 días de datos de demostración en SQLite y se puede ejecutar más de una vez sin duplicarlos.
+Abre `http://127.0.0.1:5173`. `npm run seed` solo crea el administrador; el dashboard inicia vacío. El administrador puede crear usuarios desde **Usuarios** y subir los archivos nocturnos desde **Cargar Excel**.
 
-El administrador puede crear cuentas desde **Usuarios** y descargar la plantilla desde **Cargar Excel**. El archivo `.xlsx` debe contener exactamente dos filas: encabezados y un día de datos. La primera columna se llama `fecha` (formato `AAAA-MM-DD`); las siguientes son KPIs numéricos no negativos. Una fecha existente se rechaza completa. Todas las cuentas pueden consultar los mismos indicadores.
+Cada archivo debe incluir las tres hojas mencionadas. `CONTROL_DIARIO` admite varios registros, uno por fecha, turno y lote; `INCIDENCIAS` detalla los defectos por fecha y lote; `RESUMEN_KPI` se contrasta con los totales calculados desde el detalle. Si el resumen difiere, la carga se completa y muestra una advertencia. Una combinación de fecha, turno y lote ya cargada rechaza el archivo completo.
 
-## Adaptadores de datos
+La merma se muestra como cantidad informativa. Los pendientes al cierre corresponden al último saldo general del periodo, sin dividirse por turno o producto. La tasa de aprobación se calcula con las cajas aprobadas sobre las inspeccionadas.
 
-`DATABASE_ADAPTER=sqlite` usa `SQLITE_PATH` y crea automáticamente las tablas definidas en `server/db/schema.sqlite.sql`. Los archivos de la base se guardan en `data/`, ignorados por Git.
+## Base de datos
 
-`DATABASE_ADAPTER=oracle` usa `ORACLE_USER`, `ORACLE_PASSWORD` y `ORACLE_CONNECT_STRING`, con el controlador oficial `oracledb` en modo Thin. El DBA debe ejecutar `server/db/schema.oracle.sql` o proporcionar un esquema existente para adaptar el módulo. La API consume el mismo contrato del repositorio para ambos motores. No se ha probado Oracle contra una instancia real porque todavía no hay acceso ni esquema aprobado.
+`DATABASE_ADAPTER=sqlite` usa `SQLITE_PATH` y crea las tablas en `server/db/schema.sqlite.sql`. La base local se guarda en `data/`, excluida por Git.
+
+`DATABASE_ADAPTER=oracle` usa `ORACLE_USER`, `ORACLE_PASSWORD` y `ORACLE_CONNECT_STRING`, con el controlador oficial `oracledb` en modo Thin. El DBA debe aplicar `server/db/schema.oracle.sql` o proporcionar el esquema existente para adaptar el módulo. La integración Oracle aún no se ha probado contra una instancia real.
 
 ## Verificar
 
@@ -30,4 +37,4 @@ npm test
 npm run build
 ```
 
-La prueba de integración cubre login, permisos, carga de un Excel válido, consulta, rechazo de fecha duplicada y archivo inválido con SQLite en memoria. La validación de Oracle queda pendiente hasta recibir versión, conectividad, credenciales y permisos o esquema existente.
+La prueba de integración cubre login, permisos, carga de las tres hojas, filtros, incidencias, advertencias y rechazo de duplicados en SQLite. `.env` y los datos locales no se agregan al control de versiones; `.env.example` solo documenta las variables requeridas.

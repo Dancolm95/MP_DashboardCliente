@@ -16,7 +16,10 @@ Dashboard con inicio de sesión. Desarrolla por entregas pequeñas, con un alcan
 
 ## Flujo de trabajo
 
-1. Lee la tarea y revisa el código relacionado. Si una duda cambia el alcance, el comportamiento esperado o los permisos, aclárala antes de implementar.
-2. Si la tarea pide revisión o planificación, trabaja en modo de solo lectura. Si pide implementación, limita los cambios a lo necesario para cumplir sus criterios de aceptación.
-3. Verifica los criterios con las comprobaciones disponibles. Si el cambio afecta al acceso, comprueba un caso permitido y uno denegado.
-4. Al terminar, resume qué cambió, qué comprobaste y qué quedó pendiente de verificar.
+1. Trabaja en una entrega a la vez. Identifica el objetivo, el alcance y los criterios de aceptación de la tarea. Si una duda cambia el comportamiento, los datos mostrados o los permisos, aclárala antes de implementar.
+2. Si la tarea pide revisión o planificación, trabaja en modo de solo lectura. Indica qué está comprobado, qué falta verificar y cuál sería el cambio mínimo. Si la tarea pide implementación, reutiliza el código existente y limita los cambios al alcance acordado.
+3. Verifica la entrega según el comportamiento que cambia.
+   - **Sesión y permisos.** Comprueba un caso permitido y uno denegado. Si cambia lo que ve el usuario, verifica también el recorrido en el navegador.
+   - **Indicadores y filtros.** Usa datos de prueba con un resultado esperado que se pueda calcular a mano. Comprueba los filtros afectados y, si aplica, el caso sin datos.
+   - **Carga de datos.** Usa la fuente acordada para la entrega. Verifica que un dato representativo llegue desde la fuente hasta la vista o el indicador que lo consume.
+4. Al cerrar, indica qué cambió, qué criterios comprobaste y qué quedó pendiente de verificar. Si aparece trabajo fuera del alcance, regístralo como una tarea o decisión pendiente.

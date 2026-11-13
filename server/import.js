@@ -6,6 +6,7 @@ const requiredControl = ['Fecha', 'Turno', 'Lote / referencia', 'Producto', 'Caj
 const requiredIncident = ['Fecha', 'Lote / referencia', 'Producto', 'Tipo de defecto', 'Cajas afectadas', 'Acción / destino', 'Observación', 'Responsable'];
 const clean = value => String(value ?? '').trim();
 const number = (value, field, row) => {
+  if (clean(value) === '') fail(`${field}: falta el valor en fila ${row}.`);
   const n = typeof value === 'number' ? value : Number(clean(value));
   if (!Number.isFinite(n) || n < 0) fail(`${field}: valor inválido en fila ${row}.`);
   return n;
@@ -62,10 +63,11 @@ export async function parseQualityWorkbook(buffer) {
     const lot = clean(row.get('Lote / referencia'));
     const matches = records.filter(record => record.date === date && record.lot === lot);
     if (matches.length !== 1) fail(`La incidencia de la fila ${row.row} no tiene un lote y fecha únicos en CONTROL_DIARIO.`);
+    if (clean(row.get('Producto')) !== matches[0].product) fail(`El producto de INCIDENCIAS fila ${row.row} no coincide con CONTROL_DIARIO.`);
     return { date, lot, product: clean(row.get('Producto')), defect: clean(row.get('Tipo de defecto')), affected: number(row.get('Cajas afectadas'), 'Cajas afectadas', row.row), action: clean(row.get('Acción / destino')), observation: clean(row.get('Observación')), responsible: clean(row.get('Responsable')), recordKey: `${date}|${matches[0].shift.toLowerCase()}|${lot.toLowerCase()}` };
   });
   const summaryRows = objectRows(sheets.get('RESUMEN_KPI'), ['Indicador', 'Valor'], 'RESUMEN_KPI');
-  const sourceTotals = Object.fromEntries(summaryRows.map(row => [clean(row.get('Indicador')), Number(row.get('Valor'))]));
+  const sourceTotals = Object.fromEntries(summaryRows.filter(row => clean(row.get('Valor')) !== '').map(row => [clean(row.get('Indicador')), Number(row.get('Valor'))]));
   const totals = { 'Cajas recibidas': records.reduce((n, r) => n + r.received, 0), 'Cajas inspeccionadas': records.reduce((n, r) => n + r.inspected, 0), 'Cajas aprobadas': records.reduce((n, r) => n + r.approved, 0), 'Cajas rechazadas': records.reduce((n, r) => n + r.rejected, 0), 'Cajas con merma (informativo)': records.reduce((n, r) => n + r.waste, 0) };
   const warnings = Object.entries(totals).filter(([label, value]) => Number.isFinite(sourceTotals[label]) && Math.abs(sourceTotals[label] - value) > 0.01).map(([label, value]) => `${label}: detalle ${value}, resumen ${sourceTotals[label]}.`);
   return { records, incidents, warnings };

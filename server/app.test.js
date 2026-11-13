@@ -6,14 +6,27 @@ import { createSqliteRepository } from './db/sqlite.js';
 import { createApp } from './app.js';
 import { hashPassword } from './security.js';
 
-async function workbook(rows) {
+async function workbook() {
   const book = new ExcelJS.Workbook();
-  const sheet = book.addWorksheet('KPIs diarios');
-  rows.forEach(row => sheet.addRow(row));
+  const control = book.addWorksheet('CONTROL_DIARIO');
+  control.addRow(['Fecha', 'Turno', 'Lote / referencia', 'Producto', 'Cajas recibidas', 'Pendientes iniciales', 'Cajas inspeccionadas', 'Cajas aprobadas', 'Cajas rechazadas', 'Cajas con merma*', 'Pendientes finales', 'Personal asignado', 'Horas efectivas / persona']);
+  control.addRow(['2026-11-02', 'Día', 'L-001', 'Vajillas', 20, 0, 15, 12, 3, 1, 5, 2, 8]);
+  control.addRow(['2026-11-03', 'Tarde', 'L-002', 'Platos', 10, 5, 12, 10, 2, 1, 3, 2, 8]);
+  const incidents = book.addWorksheet('INCIDENCIAS');
+  incidents.addRow(['Fecha', 'Lote / referencia', 'Producto', 'Tipo de defecto', 'Cajas afectadas', 'Acción / destino', 'Observación', 'Responsable']);
+  incidents.addRow(['2026-11-02', 'L-001', 'Vajillas', 'Rotura', 2, 'Merma', '', 'Supervisor']);
+  incidents.addRow(['2026-11-03', 'L-002', 'Platos', 'Fisura', 1, 'Reproceso', '', 'Supervisor']);
+  const summary = book.addWorksheet('RESUMEN_KPI');
+  summary.addRow(['Indicador', 'Valor']);
+  summary.addRow(['Cajas recibidas', 31]);
+  summary.addRow(['Cajas inspeccionadas', 27]);
+  summary.addRow(['Cajas aprobadas', 22]);
+  summary.addRow(['Cajas rechazadas', 5]);
+  summary.addRow(['Cajas con merma (informativo)', 2]);
   return Buffer.from(await book.xlsx.writeBuffer());
 }
 
-test('login, permisos, carga Excel y fecha duplicada', async () => {
+test('login, importación de tres hojas, filtros, incidencias y duplicados', async () => {
   const repo = createSqliteRepository(':memory:');
   const password = 'ExamplePass123!';
   await repo.createUser({ id: randomUUID(), email: 'admin@test.local', name: 'Admin', passwordHash: await hashPassword(password), role: 'admin', createdAt: new Date().toISOString() });
@@ -28,27 +41,37 @@ test('login, permisos, carga Excel y fecha duplicada', async () => {
     return res.headers.get('set-cookie').split(';')[0];
   }
   try {
-    assert.equal((await request('/kpis')).status, 401);
-    const adminCookie = await login('admin@test.local');
-    const viewerCookie = await login('viewer@test.local');
-    const xlsx = await workbook([['fecha', 'total_recibido', 'total_mermado'], ['2026-11-01', 100, 5]]);
-    const upload = cookie => request('/uploads', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'X-File-Name': 'test.xlsx' }, body: xlsx });
-    assert.equal((await upload(viewerCookie)).status, 403);
-    assert.equal((await request('/users', { headers: { Cookie: viewerCookie } })).status, 403);
-    assert.equal((await upload(adminCookie)).status, 201);
-    const recordsRes = await request('/kpis?from=2026-11-01&to=2026-11-30', { headers: { Cookie: viewerCookie } });
-    assert.equal(recordsRes.status, 200);
-    const records = await recordsRes.json();
-    assert.equal(records.reports.length, 1);
-    assert.equal(records.reports[0].metrics[0].value, 5);
-    assert.equal((await upload(adminCookie)).status, 409);
-    assert.equal((await request('/kpis?from=2026-11-01&to=2026-11-30', { headers: { Cookie: adminCookie } }).then(r => r.json())).reports.length, 1);
-    const invalid = await workbook([['fecha', 'total_recibido'], ['2026-11-02', 'no es número']]);
-    assert.equal((await request('/uploads', { method: 'POST', headers: { Cookie: adminCookie, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }, body: invalid })).status, 400);
-    const newUser = await request('/users', { method: 'POST', headers: { Cookie: adminCookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'New User', email: 'new@test.local', password: 'Password123!', role: 'viewer' }) });
-    assert.equal(newUser.status, 201);
-    assert.equal((await request('/auth/logout', { method: 'POST', headers: { Cookie: viewerCookie } })).status, 200);
-    assert.equal((await request('/kpis', { headers: { Cookie: viewerCookie } })).status, 401);
+    assert.equal((await request('/dashboard')).status, 401);
+    const admin = await login('admin@test.local');
+    const viewer = await login('viewer@test.local');
+    const empty = await request('/dashboard?from=2026-11-01&to=2026-11-30', { headers: { Cookie: viewer } }).then(r => r.json());
+    assert.equal(empty.records.length, 0);
+    assert.equal(empty.summary.pendingEnd, null);
+    const xlsx = await workbook();
+    const upload = cookie => request('/uploads', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'X-File-Name': 'control.xlsx' }, body: xlsx });
+    assert.equal((await upload(viewer)).status, 403);
+    assert.equal((await request('/users', { headers: { Cookie: viewer } })).status, 403);
+    assert.equal((await request('/template', { headers: { Cookie: viewer } })).status, 403);
+    const added = await upload(admin);
+    assert.equal(added.status, 201);
+    const result = await added.json();
+    assert.equal(result.recordCount, 2);
+    assert.equal(result.incidentCount, 2);
+    assert.equal(result.warnings.length, 1);
+    const dashboard = await request('/dashboard?from=2026-11-01&to=2026-11-30', { headers: { Cookie: viewer } }).then(r => r.json());
+    assert.equal(dashboard.summary.received, 30);
+    assert.equal(dashboard.summary.inspected, 27);
+    assert.equal(dashboard.summary.pendingEnd, 3);
+    assert.equal(dashboard.incidents.length, 2);
+    const filtered = await request('/dashboard?from=2026-11-01&to=2026-11-30&shift=D%C3%ADa&product=Vajillas', { headers: { Cookie: viewer } }).then(r => r.json());
+    assert.equal(filtered.summary.received, 20);
+    assert.equal(filtered.summary.pendingEnd, 3);
+    assert.equal(filtered.incidents.length, 1);
+    assert.equal((await upload(admin)).status, 409);
+    assert.equal((await repo.listQualityRecords('2026-11-01', '2026-11-30')).length, 2);
+    assert.equal((await request('/auth/logout', { method: 'POST', headers: { Cookie: viewer } })).status, 200);
+    assert.equal((await request('/dashboard', { headers: { Cookie: viewer } })).status, 401);
+    assert.equal((await request('/auth/me', { headers: { Cookie: viewer } })).status, 401);
   } finally {
     await new Promise(resolve => server.close(resolve));
     await repo.close();

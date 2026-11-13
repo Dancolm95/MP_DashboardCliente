@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { DuplicateDateError } from './index.js';
-import { groupReports } from './shared.js';
+import { DuplicateRecordError } from './index.js';
 
 // This adapter targets the tables in schema.oracle.sql. It cannot be integration
 // tested until an Oracle connection and the approved schema are available.
@@ -36,29 +35,63 @@ export async function createOracleRepository(config) {
       return (await query('SELECT user_id AS "userId", expires_at AS "expiresAt" FROM sessions WHERE token_hash = :tokenHash', { tokenHash }))[0] || null;
     },
     async deleteSession(tokenHash) { await execute('DELETE FROM sessions WHERE token_hash = :tokenHash', { tokenHash }); },
-    async listReports(from, to) {
-      const rows = await query(`SELECT r.id AS "id", r.report_date AS "date", r.uploaded_at AS "uploadedAt",
-        r.source_name AS "sourceName", r.is_demo AS "isDemo", m.metric_key AS "metricKey",
-        m.metric_label AS "metricLabel", m.metric_value AS "metricValue"
-        FROM reports r JOIN metrics m ON m.report_id = r.id
-        WHERE r.report_date >= :fromDate AND r.report_date <= :toDate ORDER BY r.report_date ASC, m.metric_key ASC`, { fromDate: from, toDate: to });
-      return groupReports(rows);
+    async listQualityRecords(from, to) {
+      return query(`SELECT id AS "id", report_date AS "date", row_order AS "rowOrder",
+        shift AS "shift", lot AS "lot", product AS "product", received AS "received",
+        pending_start AS "pendingStart", inspected AS "inspected", approved AS "approved",
+        rejected AS "rejected", waste AS "waste", pending_end AS "pendingEnd",
+        staff AS "staff", hours_per_person AS "hoursPerPerson",
+        observations AS "observations", source_name AS "sourceName", uploaded_at AS "uploadedAt" FROM quality_records
+        WHERE report_date >= :fromDate AND report_date <= :toDate
+        ORDER BY report_date, uploaded_at, row_order`, { fromDate: from, toDate: to });
     },
-    async insertReport({ date, uploadedBy, sourceName, isDemo = false, metrics }) {
-      const id = randomUUID();
+    async listQualityIncidents(from, to) {
+      return query(`SELECT i.id AS "id", i.record_id AS "recordId", i.report_date AS "date",
+        r.shift AS "shift", i.lot AS "lot", i.product AS "product",
+        i.defect AS "defect", i.affected AS "affected", i.action AS "action",
+        i.observation AS "observation", i.responsible AS "responsible"
+        FROM quality_incidents i JOIN quality_records r ON r.id = i.record_id
+        WHERE i.report_date >= :fromDate AND i.report_date <= :toDate
+        ORDER BY i.report_date, i.lot`, { fromDate: from, toDate: to });
+    },
+    async insertQualityBatch({ records, incidents, uploadedBy, sourceName }) {
+      const ids = new Map();
+      const uploadedAt = new Date().toISOString();
       const connection = await pool.getConnection();
       try {
-        await connection.execute('INSERT INTO reports (id,report_date,uploaded_by,uploaded_at,source_name,is_demo) VALUES (:id,:reportDate,:uploadedBy,:uploadedAt,:sourceName,:isDemo)',
-          { id, reportDate: date, uploadedBy, uploadedAt: new Date().toISOString(), sourceName, isDemo: isDemo ? 1 : 0 });
-        for (const metric of metrics) {
-          await connection.execute('INSERT INTO metrics (report_id,metric_key,metric_label,metric_value) VALUES (:reportId,:metricKey,:metricLabel,:metricValue)',
-            { reportId: id, metricKey: metric.key, metricLabel: metric.label, metricValue: metric.value });
+        for (const record of records) {
+          const id = randomUUID();
+          const recordKey = `${record.date}|${record.shift.toLowerCase()}|${record.lot.toLowerCase()}`;
+          ids.set(recordKey, id);
+          await connection.execute(`INSERT INTO quality_records
+            (id,record_key,report_date,row_order,shift,lot,product,received,pending_start,
+            inspected,approved,rejected,waste,pending_end,staff,hours_per_person,
+            observations,uploaded_by,uploaded_at,source_name)
+            VALUES (:id,:recordKey,:reportDate,:rowOrder,:shift,:lot,:product,:received,
+            :pendingStart,:inspected,:approved,:rejected,:waste,:pendingEnd,:staff,
+            :hoursPerPerson,:observations,:uploadedBy,:uploadedAt,:sourceName)`,
+            { id, recordKey, reportDate: record.date, rowOrder: record.row, shift: record.shift,
+              lot: record.lot, product: record.product, received: record.received,
+              pendingStart: record.pendingStart, inspected: record.inspected,
+              approved: record.approved, rejected: record.rejected, waste: record.waste,
+              pendingEnd: record.pendingEnd, staff: record.staff,
+              hoursPerPerson: record.hoursPerPerson, observations: record.observations || null,
+              uploadedBy, uploadedAt, sourceName });
+        }
+        for (const incident of incidents) {
+          await connection.execute(`INSERT INTO quality_incidents
+            (id,record_id,report_date,lot,product,defect,affected,action,observation,responsible)
+            VALUES (:id,:recordId,:reportDate,:lot,:product,:defect,:affected,:action,
+            :observation,:responsible)`,
+            { id: randomUUID(), recordId: ids.get(incident.recordKey), reportDate: incident.date,
+              lot: incident.lot, product: incident.product, defect: incident.defect,
+              affected: incident.affected, action: incident.action || null,
+              observation: incident.observation || null, responsible: incident.responsible || null });
         }
         await connection.commit();
-        return id;
       } catch (error) {
         await connection.rollback();
-        if (error.errorNum === 1) throw new DuplicateDateError(date);
+        if (error.errorNum === 1) throw new DuplicateRecordError();
         throw error;
       } finally { await connection.close(); }
     },

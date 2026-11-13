@@ -2,9 +2,10 @@ import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { DuplicateDateError } from './db/index.js';
+import { DuplicateRecordError } from './db/index.js';
 import { hashPassword, verifyPassword, newSessionToken, tokenHash, publicUser } from './security.js';
-import { parseKpiWorkbook, createTemplate } from './import.js';
+import { parseQualityWorkbook, createTemplate } from './import.js';
+import { buildDashboard } from './quality.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const bad = (message, status = 400) => { const error = new Error(message); error.status = status; throw error; };
@@ -51,11 +52,12 @@ export function createApp(repo) {
     res.json({ ok: true });
   }));
 
-  app.get('/api/kpis', requireAuth, asyncRoute(async (req, res) => {
+  app.get('/api/dashboard', requireAuth, asyncRoute(async (req, res) => {
     const to = String(req.query.to || new Date().toISOString().slice(0, 10));
     const from = String(req.query.from || new Date(Date.now() - 29 * DAY).toISOString().slice(0, 10));
     if (!dateOk(from) || !dateOk(to) || from > to) bad('Selecciona un rango de fechas válido.');
-    res.json({ reports: await repo.listReports(from, to) });
+    const [records, incidents] = await Promise.all([repo.listQualityRecords(from, to), repo.listQualityIncidents(from, to)]);
+    res.json(buildDashboard(records, incidents, { shift: String(req.query.shift || ''), product: String(req.query.product || '') }));
   }));
   app.get('/api/users', requireAuth, requireAdmin, asyncRoute(async (_req, res) => res.json({ users: await repo.listUsers() })));
   app.post('/api/users', requireAuth, requireAdmin, asyncRoute(async (req, res) => {
@@ -80,16 +82,16 @@ export function createApp(repo) {
     express.raw({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', limit: '2mb' }),
     asyncRoute(async (req, res) => {
       if (!Buffer.isBuffer(req.body) || !req.body.length) bad('Selecciona un archivo .xlsx válido.');
-      const { date, metrics } = await parseKpiWorkbook(req.body);
+      const { records, incidents, warnings } = await parseQualityWorkbook(req.body);
       const sourceName = String(req.headers['x-file-name'] || 'indicadores.xlsx').replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 100);
-      await repo.insertReport({ date, metrics, uploadedBy: req.user.id, sourceName });
-      res.status(201).json({ date, metricCount: metrics.length });
+      await repo.insertQualityBatch({ records, incidents, uploadedBy: req.user.id, sourceName });
+      res.status(201).json({ recordCount: records.length, incidentCount: incidents.length, warnings });
     }));
 
   if (existsSync(resolve('dist'))) app.use(express.static(resolve('dist')));
   app.use('/api', (_req, _res, next) => next(Object.assign(new Error('Ruta no encontrada.'), { status: 404 })));
   app.use((error, _req, res, _next) => {
-    const status = error instanceof DuplicateDateError ? 409 : error.status || (error.type === 'entity.too.large' ? 413 : 500);
+    const status = error instanceof DuplicateRecordError ? 409 : error.status || (error.type === 'entity.too.large' ? 413 : 500);
     if (status >= 500) console.error(error);
     res.status(status).json({ error: status >= 500 ? 'Ocurrió un error interno.' : error.message });
   });
