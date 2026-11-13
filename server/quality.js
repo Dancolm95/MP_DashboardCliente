@@ -24,9 +24,9 @@ export function buildDashboard(allRecords, allIncidents, { shift = '', product =
   const generalReceived = sum(allRecords, 'received');
   const dailyMap = new Map();
   for (const record of records) {
-    if (!dailyMap.has(record.date)) dailyMap.set(record.date, { date: record.date, received: 0, inspected: 0, approved: 0, rejected: 0, waste: 0 });
+    if (!dailyMap.has(record.date)) dailyMap.set(record.date, { date: record.date, pendingStart: 0, received: 0, inspected: 0, approved: 0, rejected: 0, waste: 0 });
     const day = dailyMap.get(record.date);
-    for (const field of ['received', 'inspected', 'approved', 'rejected', 'waste']) day[field] += Number(record[field]);
+    for (const field of ['pendingStart', 'received', 'inspected', 'approved', 'rejected', 'waste']) day[field] += Number(record[field]);
   }
   return {
     summary: { received, inspected, approved, rejected, waste, approvalRate: percent(approved, inspected), rejectionRate: percent(rejected, inspected), productivity: personHours ? inspected / personHours : 0, pendingEnd: last ? Number(last.pendingEnd) : null, pendingDate: last?.date || null, completionGeneral: first ? percent(generalInspected, generalReceived + Number(first.pendingStart)) : null },

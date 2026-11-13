@@ -74,6 +74,13 @@ test('login, límite de intentos, importación, filtros e incidencias', async t 
     assert.equal(dashboard.summary.approvalRate, 22 / 27 * 100);
     assert.equal(dashboard.summary.pendingEnd, 3);
     assert.deepEqual(
+      dashboard.daily.map(({ pendingStart, received, inspected, approved, rejected }) => ({ pendingStart, received, inspected, approved, rejected })),
+      [
+        { pendingStart: 0, received: 20, inspected: 15, approved: 12, rejected: 3 },
+        { pendingStart: 5, received: 10, inspected: 12, approved: 10, rejected: 2 },
+      ],
+    );
+    assert.deepEqual(
       dashboard.records.map(({ received, pendingStart, inspected, pendingEnd }) => ({ received, pendingStart, inspected, pendingEnd })),
       [
         { received: 10, pendingStart: 5, inspected: 12, pendingEnd: 3 },
@@ -88,6 +95,9 @@ test('login, límite de intentos, importación, filtros e incidencias', async t 
     const filtered = await request('/dashboard?from=2026-11-01&to=2026-11-30&shift=D%C3%ADa&product=Vajillas', { headers: { Cookie: viewer } }).then(r => r.json());
     assert.equal(filtered.summary.received, 20);
     assert.equal(filtered.summary.pendingEnd, 3);
+    assert.deepEqual(filtered.daily.map(({ pendingStart, received, inspected, approved, rejected }) => ({ pendingStart, received, inspected, approved, rejected })), [
+      { pendingStart: 0, received: 20, inspected: 15, approved: 12, rejected: 3 },
+    ]);
     assert.equal(filtered.incidents.length, 1);
     assert.equal((await upload(admin)).status, 409);
     assert.equal((await repo.listQualityRecords('2026-11-01', '2026-11-30')).length, 2);

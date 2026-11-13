@@ -360,7 +360,7 @@ export function QualityContent({
               <div className="quality-section-title">
                 <div>
                   <h2>Avance acumulado</h2>
-                  <span>Cajas recibidas e inspeccionadas</span>
+                  <span>Las líneas suman las cajas desde el inicio del periodo</span>
                 </div>
                 <span>{daily.length} días</span>
               </div>
@@ -484,6 +484,40 @@ export function QualityContent({
               <p className="donut-formula">
                 Aprobación = aprobadas ÷ inspeccionadas
               </p>
+            </div>
+          </div>
+          <div className="quality-panel daily-detail">
+            <div className="quality-section-title">
+              <div>
+                <h2>Detalle diario del gráfico</h2>
+                <span>Valores de cada día; el gráfico muestra su suma acumulada</span>
+              </div>
+            </div>
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>FECHA</th>
+                    <th>PEND. INICIALES</th>
+                    <th>RECIBIDAS</th>
+                    <th>INSPECCIONADAS</th>
+                    <th>APROBADAS</th>
+                    <th>RECHAZADAS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {daily.map(day => (
+                    <tr key={day.date}>
+                      <td className="strong-cell">{fullDate(day.date)}</td>
+                      <td>{fmt.format(day.pendingStart)}</td>
+                      <td>{fmt.format(day.received)}</td>
+                      <td>{fmt.format(day.inspected)}</td>
+                      <td>{fmt.format(day.approved)}</td>
+                      <td>{fmt.format(day.rejected)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
           <div className="quality-breakdowns">
