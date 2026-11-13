@@ -80,10 +80,10 @@ export function createApp(repo) {
     const name = String(req.body?.name || '').trim();
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
-    const role = req.body?.role === 'admin' ? 'admin' : 'viewer';
+    if (req.body?.role !== undefined && req.body.role !== 'viewer') bad('Solo se pueden crear cuentas de visualización.', 403);
     if (name.length < 2 || name.length > 100 || !emailOk(email) || email.length > 255 || password.length < 10) bad('Ingresa nombre, correo válido y contraseña de al menos 10 caracteres.');
     if (await repo.getUserByEmail(email)) bad('Ya existe una cuenta con ese correo.', 409);
-    const user = { id: randomUUID(), name, email, passwordHash: await hashPassword(password), role, createdAt: new Date().toISOString() };
+    const user = { id: randomUUID(), name, email, passwordHash: await hashPassword(password), role: 'viewer', createdAt: new Date().toISOString() };
     try { await repo.createUser(user); }
     catch (error) { if (error.message?.includes('UNIQUE') || error.errorNum === 1) bad('Ya existe una cuenta con ese correo.', 409); throw error; }
     res.status(201).json({ user: publicUser(user) });

@@ -51,6 +51,14 @@ test('login, límite de intentos, importación, filtros e incidencias', async t 
     const upload = cookie => request('/uploads', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'X-File-Name': 'control.xlsx' }, body: xlsx });
     assert.equal((await upload(viewer)).status, 403);
     assert.equal((await request('/users', { headers: { Cookie: viewer } })).status, 403);
+    const newUser = { name: 'New Viewer', email: 'new@test.local', password: 'Password123!' };
+    const createUser = (cookie, body) => request('/users', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    assert.equal((await createUser(viewer, newUser)).status, 403);
+    assert.equal((await createUser(admin, { ...newUser, role: 'admin' })).status, 403);
+    const created = await createUser(admin, newUser);
+    assert.equal(created.status, 201);
+    assert.equal((await created.json()).user.role, 'viewer');
+    assert.equal((await repo.listUsers()).filter(user => user.role === 'admin').length, 1);
     assert.equal((await request('/template', { headers: { Cookie: admin } })).status, 404);
     const added = await upload(admin);
     assert.equal(added.status, 201);

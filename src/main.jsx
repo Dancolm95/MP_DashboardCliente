@@ -495,8 +495,7 @@ function UsersPage({ setNotice }) {
   const [form, setForm] = useState({
     name: '',
     email: '',
-    password: '',
-    role: 'viewer'
+    password: ''
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -516,7 +515,7 @@ function UsersPage({ setNotice }) {
         body: JSON.stringify(form)
       });
       setUsers(u => [data.user, ...u]);
-      setForm({ name: '', email: '', password: '', role: 'viewer' });
+      setForm({ name: '', email: '', password: '' });
       setNotice({
         type: 'success',
         text: `Cuenta de ${data.user.name} creada correctamente.`
@@ -533,7 +532,7 @@ function UsersPage({ setNotice }) {
         <div>
           <div className="eyebrow">CONTROL DE ACCESO</div>
           <h1>Usuarios</h1>
-          <p>Administra quién puede consultar o actualizar el panel.</p>
+          <p>Crea cuentas para consultar el panel.</p>
         </div>
       </div>
       <div className="users-layout">
@@ -565,8 +564,8 @@ function UsersPage({ setNotice }) {
         <div className="create-card">
           <div className="section-head">
             <div>
-              <h2>Nuevo usuario</h2>
-              <p>Crea una cuenta para el equipo.</p>
+              <h2>Nuevo visualizador</h2>
+              <p>Crea una cuenta de consulta para el equipo.</p>
             </div>
             <div className="upload-step">+</div>
           </div>
@@ -601,16 +600,6 @@ function UsersPage({ setNotice }) {
                 required
                 minLength="10"
               />
-            </label>
-            <label>
-              Rol
-              <select
-                value={form.role}
-                onChange={e => setForm({ ...form, role: e.target.value })}
-              >
-                <option value="viewer">Visualizador</option>
-                <option value="admin">Administrador</option>
-              </select>
             </label>
             {error && (
               <div className="form-error">

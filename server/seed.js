@@ -9,7 +9,11 @@ try {
   if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD === 'REPLACE_WITH_A_LOCAL_PASSWORD') throw new Error('Define ADMIN_EMAIL y una ADMIN_PASSWORD local en .env antes de ejecutar seed.');
   const email = process.env.ADMIN_EMAIL.toLowerCase();
   const password = process.env.ADMIN_PASSWORD;
+  const admins = (await repo.listUsers()).filter(user => user.role === 'admin');
+  if (admins.length > 1) throw new Error('Ya existe más de un administrador. Revisa las cuentas antes de continuar.');
   let admin = await repo.getUserByEmail(email);
+  if (admin && admin.role !== 'admin') throw new Error('ADMIN_EMAIL pertenece a un visualizador. Define el correo del administrador existente.');
+  if (!admin && admins.length) throw new Error('Ya existe un administrador con otro correo. Usa ese correo en ADMIN_EMAIL.');
   if (!admin) {
     admin = { id: randomUUID(), email, name: 'Administrador', passwordHash: await hashPassword(password), role: 'admin', createdAt: new Date().toISOString() };
     await repo.createUser(admin);
