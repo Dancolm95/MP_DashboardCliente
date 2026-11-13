@@ -8,6 +8,8 @@ import { parseQualityWorkbook } from './import.js';
 import { buildDashboard } from './quality.js';
 
 const DAY = 24 * 60 * 60 * 1000;
+const LOGIN_WINDOW = 15 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS = 5;
 const bad = (message, status = 400) => { const error = new Error(message); error.status = status; throw error; };
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 const emailOk = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -15,6 +17,7 @@ const dateOk = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.
 
 export function createApp(repo) {
   const app = express();
+  const loginAttempts = new Map();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '100kb' }));
 
@@ -37,12 +40,25 @@ export function createApp(repo) {
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
   app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: publicUser(req.user) }));
   app.post('/api/auth/login', asyncRoute(async (req, res) => {
+    const now = Date.now();
+    for (const [ip, attempt] of loginAttempts) {
+      if (attempt.expiresAt <= now) loginAttempts.delete(ip);
+    }
+    const ip = req.ip;
+    const attempt = loginAttempts.get(ip);
+    if (attempt?.count >= MAX_LOGIN_ATTEMPTS) {
+      res.set('Retry-After', String(Math.ceil((attempt.expiresAt - now) / 1000)));
+      bad('Demasiados intentos de acceso. Intenta más tarde.', 429);
+    }
+    if (attempt) attempt.count += 1;
+    else loginAttempts.set(ip, { count: 1, expiresAt: now + LOGIN_WINDOW });
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
     const user = await repo.getUserByEmail(email);
     if (!user || !(await verifyPassword(password, user.passwordHash))) bad('Correo o contraseña incorrectos.', 401);
     const token = newSessionToken();
     await repo.createSession(tokenHash(token), user.id, new Date(Date.now() + 7 * DAY).toISOString());
+    loginAttempts.delete(ip);
     res.cookie('mp_session', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 7 * DAY });
     res.json({ user: publicUser(user) });
   }));

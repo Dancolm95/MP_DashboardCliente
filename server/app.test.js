@@ -26,7 +26,7 @@ async function workbook() {
   return Buffer.from(await book.xlsx.writeBuffer());
 }
 
-test('login, importación de tres hojas, filtros, incidencias y duplicados', async () => {
+test('login, límite de intentos, importación, filtros e incidencias', async t => {
   const repo = createSqliteRepository(':memory:');
   const password = 'ExamplePass123!';
   await repo.createUser({ id: randomUUID(), email: 'admin@test.local', name: 'Admin', passwordHash: await hashPassword(password), role: 'admin', createdAt: new Date().toISOString() });
@@ -76,6 +76,14 @@ test('login, importación de tres hojas, filtros, incidencias y duplicados', asy
     assert.equal((await request('/auth/logout', { method: 'POST', headers: { Cookie: viewer } })).status, 200);
     assert.equal((await request('/dashboard', { headers: { Cookie: viewer } })).status, 401);
     assert.equal((await request('/auth/me', { headers: { Cookie: viewer } })).status, 401);
+    const tryLogin = password => request('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@test.local', password }) });
+    for (let count = 0; count < 5; count++) assert.equal((await tryLogin('wrong-password')).status, 401);
+    const blocked = await tryLogin(password);
+    assert.equal(blocked.status, 429);
+    assert.ok(Number(blocked.headers.get('retry-after')) > 0);
+    const currentTime = Date.now();
+    t.mock.method(Date, 'now', () => currentTime + 15 * 60 * 1000 + 1);
+    assert.equal((await tryLogin(password)).status, 200);
   } finally {
     await new Promise(resolve => server.close(resolve));
     await repo.close();
