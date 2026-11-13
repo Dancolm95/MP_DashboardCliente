@@ -75,7 +75,7 @@ function App() {
       <div className="content">
         {notice && <div className={`notice ${notice.type}`}><span>{notice.type === 'error' ? <AlertCircle size={18}/> : <CircleCheck size={18}/>}</span>{notice.text}<button onClick={() => setNotice(null)}><X size={16}/></button></div>}
         {['overview','records','incidents'].includes(page) && <QualityContent page={page} dashboard={dashboard} loading={loading} from={from} to={to} setFrom={setFrom} setTo={setTo} shift={shift} setShift={setShift} product={product} setProduct={setProduct} onNavigate={setTab} isAdmin={user.role === 'admin'}/>}
-        {page === 'upload' && <UploadPage onSuccess={(message, warnings) => { reload(); setTab('overview'); setNotice({ type: warnings.length ? 'error' : 'success', text: warnings.length ? `${message} Advertencias: ${warnings.join(' ')}` : message }); }}/>
+        {page === 'upload' && <UploadPage onSuccess={(message, warnings) => { reload(); setTab('overview'); setNotice({ type: warnings.length ? 'error' : 'success', text: warnings.length ? `${message} Advertencias: ${warnings.join(' ')}` : message }); }}/>}
         {page === 'users' && <UsersPage setNotice={setNotice}/>}
       </div>
     </main>
