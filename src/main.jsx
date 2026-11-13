@@ -51,7 +51,6 @@ function App() {
   const [dashboard, setDashboard] = useState(null);
   const [from, setFrom] = useState(monthAgo());
   const [to, setTo] = useState(today());
-  const [shift, setShift] = useState('');
   const [product, setProduct] = useState('');
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -64,7 +63,6 @@ function App() {
     setPage('overview');
     setFrom(monthAgo());
     setTo(today());
-    setShift('');
     setProduct('');
     setLoading(false);
     setNotice(null);
@@ -79,7 +77,7 @@ function App() {
     const version = sessionVersion.current;
     setLoading(true);
     api(
-      `/dashboard?from=${from}&to=${to}&shift=${encodeURIComponent(shift)}&product=${encodeURIComponent(product)}`
+      `/dashboard?from=${from}&to=${to}&product=${encodeURIComponent(product)}`
     )
       .then(data => {
         if (sessionVersion.current === version) setDashboard(data);
@@ -95,7 +93,7 @@ function App() {
   };
   useEffect(() => {
     if (user) reload();
-  }, [user, from, to, shift, product]);
+  }, [user, from, to, product]);
   const setTab = next => {
     setPage(next);
     setNotice(null);
@@ -218,8 +216,6 @@ function App() {
               to={to}
               setFrom={setFrom}
               setTo={setTo}
-              shift={shift}
-              setShift={setShift}
               product={product}
               setProduct={setProduct}
               onNavigate={setTab}

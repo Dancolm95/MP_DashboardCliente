@@ -35,10 +35,12 @@ export async function parseQualityWorkbook(buffer) {
   const keys = new Set();
   for (const row of controlRows) {
     const date = dateValue(row.get('Fecha'), row.row);
-    const shift = clean(row.get('Turno'));
+    const shiftLabel = clean(row.get('Turno'));
+    if (!['día', 'diurno'].includes(shiftLabel.toLocaleLowerCase('es-PE'))) fail(`Solo se admite el turno diurno en CONTROL_DIARIO fila ${row.row}.`);
+    const shift = 'Día';
     const lot = clean(row.get('Lote / referencia'));
     const product = clean(row.get('Producto'));
-    if (!shift || !lot || !product) fail(`Faltan turno, lote o producto en CONTROL_DIARIO fila ${row.row}.`);
+    if (!lot || !product) fail(`Faltan lote o producto en CONTROL_DIARIO fila ${row.row}.`);
     const key = `${date}|${shift.toLowerCase()}|${lot.toLowerCase()}`;
     if (keys.has(key)) fail(`Registro repetido en CONTROL_DIARIO fila ${row.row}: ${date}, ${shift}, ${lot}.`);
     keys.add(key);

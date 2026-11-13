@@ -21,8 +21,7 @@ import {
   CalendarDays,
   FileSpreadsheet,
   ArrowRight,
-  Boxes,
-  ListFilter
+  Boxes
 } from 'lucide-react';
 
 const fmt = new Intl.NumberFormat('es-PE', { maximumFractionDigits: 1 });
@@ -157,34 +156,22 @@ function IncidentTable({ incidents }) {
   );
 }
 
-function Breakdown({ title, rows, pending = false }) {
+function Breakdown({ title, rows }) {
   const max = Math.max(1, ...rows.map(r => r.inspected));
   return (
     <div className="quality-panel">
       <div className="quality-section-title">
         <h2>{title}</h2>
-        <span>
-          {pending ? 'Pendientes / disponibles' : 'Cajas inspeccionadas'}
-        </span>
+        <span>Cajas inspeccionadas</span>
       </div>
       <div className="breakdown-list">
         {rows.map(row => {
-          const available = row.received + row.pendingStart;
-          const remaining = available - row.inspected;
-          const width = pending
-            ? available
-              ? (remaining / available) * 100
-              : 0
-            : (row.inspected / max) * 100;
+          const width = (row.inspected / max) * 100;
           return (
             <div className="breakdown-item" key={row.name}>
               <div>
                 <strong>{row.name}</strong>
-                <span>
-                  {pending
-                    ? `${fmt.format(remaining)} de ${fmt.format(available)} cajas · ${fmt.format(width)}%`
-                    : `${fmt.format(row.inspected)} cajas`}
-                </span>
+                <span>{fmt.format(row.inspected)} cajas</span>
               </div>
               <div className="breakdown-track">
                 <i style={{ width: `${width}%` }} />
@@ -205,8 +192,6 @@ export function QualityContent({
   to,
   setFrom,
   setTo,
-  shift,
-  setShift,
   product,
   setProduct,
   onNavigate,
@@ -215,11 +200,10 @@ export function QualityContent({
   const {
     summary,
     daily = [],
-    byShift = [],
     byProduct = [],
     records = [],
     incidents = [],
-    options = { shifts: [], products: [] }
+    options = { products: [] }
   } = dashboard || {};
   const cumulative = useMemo(() => {
     let received = 0,
@@ -240,7 +224,7 @@ export function QualityContent({
     page === 'overview'
       ? 'Recepción, inspección y control de mercadería'
       : page === 'records'
-        ? 'Detalle por fecha, turno y lote'
+        ? 'Detalle por fecha y lote'
         : 'Defectos y acciones registrados por lote';
   return (
     <>
@@ -272,20 +256,6 @@ export function QualityContent({
             value={to}
             onChange={e => setTo(e.target.value)}
           />
-        </label>
-        <label>
-          <ListFilter size={16} />
-          <span>Turno</span>
-          <select
-            aria-label="Turno"
-            value={shift}
-            onChange={e => setShift(e.target.value)}
-          >
-            <option value="">Todos</option>
-            {options.shifts.map(v => (
-              <option key={v}>{v}</option>
-            ))}
-          </select>
         </label>
         <label>
           <Boxes size={16} />
@@ -520,10 +490,7 @@ export function QualityContent({
               </table>
             </div>
           </div>
-          <div className="quality-breakdowns">
-            <Breakdown title="Pendientes por turno" rows={byShift} pending />
-            <Breakdown title="Inspección por producto" rows={byProduct} />
-          </div>
+          <Breakdown title="Inspección por producto" rows={byProduct} />
           <div className="quality-panel">
             <div className="quality-section-title">
               <div>
@@ -573,7 +540,7 @@ export function QualityContent({
         <span>
           La merma se muestra como cantidad informativa. El saldo pendiente
           corresponde al cierre general más reciente del rango y no se divide
-          por turno o producto.
+          por producto.
         </span>
       </div>
     </>

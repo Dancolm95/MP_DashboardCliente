@@ -1700,12 +1700,6 @@ tr:last-child td {
   text-align: center;
 }
 
-.quality-breakdowns {
-  display: grid;
-  grid-template-columns: repeat(2,minmax(0,1fr));
-  gap: 18px;
-}
-
 .breakdown-list {
   display: grid;
   gap: 16px;
@@ -1839,9 +1833,6 @@ tr:last-child td {
   }
   .quality-panel {
     padding: 17px;
-  }
-  .quality-breakdowns {
-    grid-template-columns: 1fr;
   }
 }
 

@@ -6,12 +6,12 @@ import { createSqliteRepository } from './db/sqlite.js';
 import { createApp } from './app.js';
 import { hashPassword } from './security.js';
 
-async function workbook() {
+async function workbook(shift = 'Diurno') {
   const book = new ExcelJS.Workbook();
   const control = book.addWorksheet('CONTROL_DIARIO');
   control.addRow(['Fecha', 'Turno', 'Lote / referencia', 'Producto', 'Cajas recibidas', 'Pendientes iniciales', 'Cajas inspeccionadas', 'Cajas aprobadas', 'Cajas rechazadas', 'Cajas con merma*', 'Pendientes finales', 'Personal asignado', 'Horas efectivas / persona']);
   control.addRow(['2026-11-02', 'Día', 'L-001', 'Vajillas', 20, 0, 15, 12, 3, 1, 5, 2, 8]);
-  control.addRow(['2026-11-03', 'Tarde', 'L-002', 'Platos', 10, 5, 12, 10, 2, 1, 3, 2, 8]);
+  control.addRow(['2026-11-03', shift, 'L-002', 'Platos', 10, 5, 12, 10, 2, 1, 3, 2, 8]);
   const incidents = book.addWorksheet('INCIDENCIAS');
   incidents.addRow(['Fecha', 'Lote / referencia', 'Producto', 'Tipo de defecto', 'Cajas afectadas', 'Acción / destino', 'Observación', 'Responsable']);
   incidents.addRow(['2026-11-02', 'L-001', 'Vajillas', 'Rotura', 2, 'Merma', '', 'Supervisor']);
@@ -50,6 +50,8 @@ test('login, límite de intentos, importación, filtros e incidencias', async t 
     const xlsx = await workbook();
     const upload = cookie => request('/uploads', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'X-File-Name': 'control.xlsx' }, body: xlsx });
     assert.equal((await upload(viewer)).status, 403);
+    const invalidShift = await workbook('Tarde');
+    assert.equal((await request('/uploads', { method: 'POST', headers: { Cookie: admin, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }, body: invalidShift })).status, 400);
     assert.equal((await request('/users', { headers: { Cookie: viewer } })).status, 403);
     const newUser = { name: 'New Viewer', email: 'new@test.local', password: 'Password123!' };
     const createUser = (cookie, body) => request('/users', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -89,8 +91,7 @@ test('login, límite de intentos, importación, filtros e incidencias', async t 
     );
     assert.equal(dashboard.incidents.length, 2);
     assert.deepEqual(dashboard.byShift.map(({ name, received, pendingStart, inspected }) => ({ name, received, pendingStart, inspected })), [
-      { name: 'Día', received: 20, pendingStart: 0, inspected: 15 },
-      { name: 'Tarde', received: 10, pendingStart: 5, inspected: 12 },
+      { name: 'Día', received: 30, pendingStart: 5, inspected: 27 },
     ]);
     const filtered = await request('/dashboard?from=2026-11-01&to=2026-11-30&shift=D%C3%ADa&product=Vajillas', { headers: { Cookie: viewer } }).then(r => r.json());
     assert.equal(filtered.summary.received, 20);
