@@ -16,6 +16,10 @@ export function buildDashboard(allRecords, allIncidents, { shift = '', product =
   const approved = sum(records, 'approved');
   const rejected = sum(records, 'rejected');
   const waste = sum(records, 'waste');
+  const openingDate = records.reduce((date, record) => !date || record.date < date ? record.date : date, null);
+  const openingPending = sum(records.filter(record => record.date === openingDate), 'pendingStart');
+  const available = received + openingPending;
+  const pendingToInspect = available - inspected;
   const personHours = records.reduce((n, r) => n + Number(r.staff) * Number(r.hoursPerPerson), 0);
   const ordered = [...allRecords].sort((a, b) => a.date.localeCompare(b.date) || String(a.uploadedAt || '').localeCompare(String(b.uploadedAt || '')) || Number(a.rowOrder) - Number(b.rowOrder));
   const last = ordered.at(-1);
@@ -29,7 +33,7 @@ export function buildDashboard(allRecords, allIncidents, { shift = '', product =
     for (const field of ['pendingStart', 'received', 'inspected', 'approved', 'rejected', 'waste']) day[field] += Number(record[field]);
   }
   return {
-    summary: { received, inspected, approved, rejected, waste, approvalRate: percent(approved, inspected), rejectionRate: percent(rejected, inspected), productivity: personHours ? inspected / personHours : 0, pendingEnd: last ? Number(last.pendingEnd) : null, pendingDate: last?.date || null, completionGeneral: first ? percent(generalInspected, generalReceived + Number(first.pendingStart)) : null },
+    summary: { received, openingPending, available, inspected, approved, rejected, pendingToInspect, waste, approvalRate: percent(approved, available), rejectionRate: percent(rejected, available), productivity: personHours ? inspected / personHours : 0, pendingEnd: last ? Number(last.pendingEnd) : null, pendingDate: last?.date || null, completionGeneral: first ? percent(generalInspected, generalReceived + Number(first.pendingStart)) : null },
     daily: [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date)),
     byShift: group(records, 'shift'), byProduct: group(records, 'product'),
     records: [...records].sort((a, b) => b.date.localeCompare(a.date) || Number(b.rowOrder) - Number(a.rowOrder)),

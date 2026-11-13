@@ -1623,7 +1623,7 @@ tr:last-child td {
   gap: 6px;
 }
 
-.blue-dot,.green-dot,.gray-dot {
+.blue-dot,.green-dot,.gray-dot,.orange-dot {
   display: inline-block;
   width: 8px;
   height: 8px;
@@ -1637,6 +1637,10 @@ tr:last-child td {
 
 .gray-dot {
   background: #dfe5ed;
+}
+
+.orange-dot {
+  background: #eead62;
 }
 
 .donut-wrap {
@@ -1668,7 +1672,7 @@ tr:last-child td {
 .donut-legend {
   display: grid;
   gap: 11px;
-  max-width: 210px;
+  max-width: 240px;
   margin: 0 auto;
 }
 

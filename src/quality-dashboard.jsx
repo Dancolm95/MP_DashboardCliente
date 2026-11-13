@@ -294,7 +294,7 @@ export function QualityContent({
               icon={CircleCheck}
               label="Aprobación"
               value={`${fmt.format(summary.approvalRate)}%`}
-              detail={`${fmt.format(summary.approved)} cajas aprobadas`}
+              detail={`${fmt.format(summary.approved)} de ${fmt.format(summary.available)} disponibles`}
               color="teal"
             />
             <KpiCard
@@ -411,7 +411,7 @@ export function QualityContent({
               <div className="quality-section-title">
                 <div>
                   <h2>Control de calidad</h2>
-                  <span>Resultado de la inspección</span>
+                  <span>Resultado sobre cajas disponibles</span>
                 </div>
               </div>
               <div className="donut-wrap">
@@ -420,7 +420,8 @@ export function QualityContent({
                     <Pie
                       data={[
                         { name: 'Aprobadas', value: summary.approved },
-                        { name: 'Rechazadas', value: summary.rejected }
+                        { name: 'Rechazadas', value: summary.rejected },
+                        { name: 'Pendientes de inspección', value: summary.pendingToInspect }
                       ]}
                       dataKey="value"
                       innerRadius="66%"
@@ -429,6 +430,7 @@ export function QualityContent({
                     >
                       <Cell fill="#17935e" />
                       <Cell fill="#e5eaf1" />
+                      <Cell fill="#eead62" />
                     </Pie>
                   </PieChart>
                 </ResponsiveContainer>
@@ -439,6 +441,18 @@ export function QualityContent({
               </div>
               <div className="donut-legend">
                 <div className="donut-total">
+                  <span>Disponibles</span>
+                  <strong>{fmt.format(summary.available)}</strong>
+                </div>
+                <div>
+                  <span>Pendientes iniciales</span>
+                  <strong>{fmt.format(summary.openingPending)}</strong>
+                </div>
+                <div>
+                  <span>Recibidas</span>
+                  <strong>{fmt.format(summary.received)}</strong>
+                </div>
+                <div>
                   <span>Inspeccionadas</span>
                   <strong>{fmt.format(summary.inspected)}</strong>
                 </div>
@@ -450,9 +464,13 @@ export function QualityContent({
                   <i className="gray-dot" /> Rechazadas{' '}
                   <strong>{fmt.format(summary.rejected)}</strong>
                 </div>
+                <div>
+                  <i className="orange-dot" /> Pendientes de inspección{' '}
+                  <strong>{fmt.format(summary.pendingToInspect)}</strong>
+                </div>
               </div>
               <p className="donut-formula">
-                Aprobación = aprobadas ÷ inspeccionadas
+                Aprobación = aprobadas ÷ (recibidas + pendientes iniciales)
               </p>
             </div>
           </div>

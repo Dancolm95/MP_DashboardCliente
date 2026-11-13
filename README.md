@@ -24,7 +24,7 @@ El login admite hasta cinco intentos por dirección IP en 15 minutos. El contado
 
 Cada archivo debe incluir las tres hojas mencionadas. `CONTROL_DIARIO` admite varios registros por fecha y lote, solo con turno `Día` o `Diurno` (se guarda como `Día`); `INCIDENCIAS` detalla los defectos por fecha y lote; `RESUMEN_KPI` se contrasta con los totales calculados desde el detalle. Si el resumen difiere, la carga se completa y muestra una advertencia. Una combinación de fecha, turno y lote ya cargada rechaza el archivo completo.
 
-La merma se muestra como cantidad informativa. Los pendientes al cierre corresponden al último saldo general del periodo, sin dividirse por turno o producto. La tasa de aprobación se calcula con las cajas aprobadas sobre las inspeccionadas.
+La merma se muestra como cantidad informativa. Los pendientes al cierre corresponden al último saldo general del periodo, sin dividirse por turno o producto. La tasa de aprobación se calcula con las cajas aprobadas sobre las recibidas en el rango más los pendientes iniciales del primer día seleccionado; así no se cuenta el saldo arrastrado varias veces.
 
 ## Base de datos
 

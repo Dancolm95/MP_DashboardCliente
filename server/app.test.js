@@ -47,6 +47,8 @@ test('login, límite de intentos, importación, filtros e incidencias', async t 
     const empty = await request('/dashboard?from=2026-11-01&to=2026-11-30', { headers: { Cookie: viewer } }).then(r => r.json());
     assert.equal(empty.records.length, 0);
     assert.equal(empty.summary.pendingEnd, null);
+    assert.equal(empty.summary.available, 0);
+    assert.equal(empty.summary.approvalRate, 0);
     const xlsx = await workbook();
     const upload = cookie => request('/uploads', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'X-File-Name': 'control.xlsx' }, body: xlsx });
     assert.equal((await upload(viewer)).status, 403);
@@ -73,7 +75,11 @@ test('login, límite de intentos, importación, filtros e incidencias', async t 
     assert.equal(dashboard.summary.inspected, 27);
     assert.equal(dashboard.summary.approved, 22);
     assert.equal(dashboard.summary.rejected, 5);
-    assert.equal(dashboard.summary.approvalRate, 22 / 27 * 100);
+    assert.equal(dashboard.summary.openingPending, 0);
+    assert.equal(dashboard.summary.available, 30);
+    assert.equal(dashboard.summary.pendingToInspect, 3);
+    assert.equal(dashboard.summary.approvalRate, 22 / 30 * 100);
+    assert.equal(dashboard.summary.rejectionRate, 5 / 30 * 100);
     assert.equal(dashboard.summary.pendingEnd, 3);
     assert.deepEqual(
       dashboard.daily.map(({ pendingStart, received, inspected, approved, rejected }) => ({ pendingStart, received, inspected, approved, rejected })),
@@ -95,11 +101,22 @@ test('login, límite de intentos, importación, filtros e incidencias', async t 
     ]);
     const filtered = await request('/dashboard?from=2026-11-01&to=2026-11-30&shift=D%C3%ADa&product=Vajillas', { headers: { Cookie: viewer } }).then(r => r.json());
     assert.equal(filtered.summary.received, 20);
+    assert.equal(filtered.summary.available, 20);
+    assert.equal(filtered.summary.approvalRate, 12 / 20 * 100);
     assert.equal(filtered.summary.pendingEnd, 3);
     assert.deepEqual(filtered.daily.map(({ pendingStart, received, inspected, approved, rejected }) => ({ pendingStart, received, inspected, approved, rejected })), [
       { pendingStart: 0, received: 20, inspected: 15, approved: 12, rejected: 3 },
     ]);
     assert.equal(filtered.incidents.length, 1);
+    const oneDay = await request('/dashboard?from=2026-11-03&to=2026-11-03', { headers: { Cookie: viewer } }).then(r => r.json());
+    assert.equal(oneDay.summary.openingPending, 5);
+    assert.equal(oneDay.summary.received, 10);
+    assert.equal(oneDay.summary.available, 15);
+    assert.equal(oneDay.summary.inspected, 12);
+    assert.equal(oneDay.summary.approved, 10);
+    assert.equal(oneDay.summary.rejected, 2);
+    assert.equal(oneDay.summary.pendingToInspect, 3);
+    assert.equal(oneDay.summary.approvalRate, 10 / 15 * 100);
     assert.equal((await upload(admin)).status, 409);
     assert.equal((await repo.listQualityRecords('2026-11-01', '2026-11-30')).length, 2);
     assert.equal((await request('/auth/logout', { method: 'POST', headers: { Cookie: viewer } })).status, 200);
