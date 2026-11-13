@@ -1680,6 +1680,20 @@ tr:last-child td {
   color: #263b55;
 }
 
+.donut-legend .donut-total {
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e8edf3;
+  color: #263b55;
+  font-weight: 700;
+}
+
+.donut-formula {
+  margin-top: 14px;
+  color: #6d7c91;
+  font-size: 10px;
+  text-align: center;
+}
+
 .quality-breakdowns {
   display: grid;
   grid-template-columns: repeat(2,minmax(0,1fr));

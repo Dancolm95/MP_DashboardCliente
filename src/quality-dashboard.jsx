@@ -459,6 +459,10 @@ export function QualityContent({
                 </div>
               </div>
               <div className="donut-legend">
+                <div className="donut-total">
+                  <span>Inspeccionadas</span>
+                  <strong>{fmt.format(summary.inspected)}</strong>
+                </div>
                 <div>
                   <i className="green-dot" /> Aprobadas{' '}
                   <strong>{fmt.format(summary.approved)}</strong>
@@ -468,6 +472,9 @@ export function QualityContent({
                   <strong>{fmt.format(summary.rejected)}</strong>
                 </div>
               </div>
+              <p className="donut-formula">
+                Aprobación = aprobadas ÷ inspeccionadas
+              </p>
             </div>
           </div>
           <div className="quality-breakdowns">

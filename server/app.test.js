@@ -69,6 +69,9 @@ test('login, límite de intentos, importación, filtros e incidencias', async t 
     const dashboard = await request('/dashboard?from=2026-11-01&to=2026-11-30', { headers: { Cookie: viewer } }).then(r => r.json());
     assert.equal(dashboard.summary.received, 30);
     assert.equal(dashboard.summary.inspected, 27);
+    assert.equal(dashboard.summary.approved, 22);
+    assert.equal(dashboard.summary.rejected, 5);
+    assert.equal(dashboard.summary.approvalRate, 22 / 27 * 100);
     assert.equal(dashboard.summary.pendingEnd, 3);
     assert.equal(dashboard.incidents.length, 2);
     assert.deepEqual(dashboard.byShift.map(({ name, received, pendingStart, inspected }) => ({ name, received, pendingStart, inspected })), [
