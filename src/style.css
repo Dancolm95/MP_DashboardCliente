@@ -525,6 +525,12 @@ p {
   overflow-x: auto;
 }
 
+.table-balance-note {
+  color: #71829a;
+  font-size: 12px;
+  margin: 0 0 12px;
+}
+
 table {
   border-collapse: collapse;
   width: 100%;

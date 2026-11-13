@@ -78,40 +78,49 @@ function KpiCard({ icon: Icon, label, value, detail, color = 'blue' }) {
 
 function DataTable({ records }) {
   return (
-    <div className="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>FECHA</th>
-            <th>TURNO</th>
-            <th>LOTE</th>
-            <th>PRODUCTO</th>
-            <th>RECIBIDAS</th>
-            <th>INSPECCIONADAS</th>
-            <th>APROBADAS</th>
-            <th>RECHAZADAS</th>
-            <th>MERMA*</th>
-            <th>PENDIENTES</th>
-          </tr>
-        </thead>
-        <tbody>
-          {records.map(r => (
-            <tr key={r.id}>
-              <td className="strong-cell">{fullDate(r.date)}</td>
-              <td>{r.shift}</td>
-              <td>{r.lot}</td>
-              <td>{r.product}</td>
-              <td>{fmt.format(r.received)}</td>
-              <td>{fmt.format(r.inspected)}</td>
-              <td>{fmt.format(r.approved)}</td>
-              <td>{fmt.format(r.rejected)}</td>
-              <td>{fmt.format(r.waste)}</td>
-              <td>{fmt.format(r.pendingEnd)}</td>
+    <>
+      <p className="table-balance-note">
+        Disponibles = recibidas + pendientes iniciales. Pendientes finales = disponibles − inspeccionadas.
+      </p>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>FECHA</th>
+              <th>TURNO</th>
+              <th>LOTE</th>
+              <th>PRODUCTO</th>
+              <th>RECIBIDAS</th>
+              <th>PEND. INICIALES</th>
+              <th>DISPONIBLES</th>
+              <th>INSPECCIONADAS</th>
+              <th>APROBADAS</th>
+              <th>RECHAZADAS</th>
+              <th>MERMA*</th>
+              <th>PEND. FINALES</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {records.map(r => (
+              <tr key={r.id}>
+                <td className="strong-cell">{fullDate(r.date)}</td>
+                <td>{r.shift}</td>
+                <td>{r.lot}</td>
+                <td>{r.product}</td>
+                <td>{fmt.format(r.received)}</td>
+                <td>{fmt.format(r.pendingStart)}</td>
+                <td>{fmt.format(r.received + r.pendingStart)}</td>
+                <td>{fmt.format(r.inspected)}</td>
+                <td>{fmt.format(r.approved)}</td>
+                <td>{fmt.format(r.rejected)}</td>
+                <td>{fmt.format(r.waste)}</td>
+                <td>{fmt.format(r.pendingEnd)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 

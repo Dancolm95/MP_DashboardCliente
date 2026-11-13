@@ -73,6 +73,13 @@ test('login, límite de intentos, importación, filtros e incidencias', async t 
     assert.equal(dashboard.summary.rejected, 5);
     assert.equal(dashboard.summary.approvalRate, 22 / 27 * 100);
     assert.equal(dashboard.summary.pendingEnd, 3);
+    assert.deepEqual(
+      dashboard.records.map(({ received, pendingStart, inspected, pendingEnd }) => ({ received, pendingStart, inspected, pendingEnd })),
+      [
+        { received: 10, pendingStart: 5, inspected: 12, pendingEnd: 3 },
+        { received: 20, pendingStart: 0, inspected: 15, pendingEnd: 5 },
+      ],
+    );
     assert.equal(dashboard.incidents.length, 2);
     assert.deepEqual(dashboard.byShift.map(({ name, received, pendingStart, inspected }) => ({ name, received, pendingStart, inspected })), [
       { name: 'Día', received: 20, pendingStart: 0, inspected: 15 },
