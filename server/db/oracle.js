@@ -5,36 +5,62 @@ import { DuplicateRecordError } from './index.js';
 // tested until an Oracle connection and the approved schema are available.
 export async function createOracleRepository(config) {
   const { ORACLE_USER: user, ORACLE_PASSWORD: password, ORACLE_CONNECT_STRING: connectString } = config;
-  if (!user || !password || !connectString) throw new Error('Faltan ORACLE_USER, ORACLE_PASSWORD u ORACLE_CONNECT_STRING.');
+  if (!user || !password || !connectString) {
+    throw new Error('Faltan ORACLE_USER, ORACLE_PASSWORD u ORACLE_CONNECT_STRING.');
+  }
   const oracledb = (await import('oracledb')).default;
-  const pool = await oracledb.createPool({ user, password, connectString, poolMin: 1, poolMax: 4, poolIncrement: 1 });
+  const pool = await oracledb.createPool({
+    user, password, connectString, poolMin: 1, poolMax: 4, poolIncrement: 1,
+  });
   const options = { outFormat: oracledb.OUT_FORMAT_OBJECT };
   async function query(sql, binds = {}) {
     const connection = await pool.getConnection();
-    try { return (await connection.execute(sql, binds, options)).rows; }
-    finally { await connection.close(); }
+    try {
+      return (await connection.execute(sql, binds, options)).rows;
+    } finally {
+      await connection.close();
+    }
   }
   async function execute(sql, binds = {}) {
     const connection = await pool.getConnection();
-    try { await connection.execute(sql, binds, { autoCommit: true }); }
-    finally { await connection.close(); }
+    try {
+      return await connection.execute(sql, binds, { autoCommit: true });
+    } finally {
+      await connection.close();
+    }
   }
   const userSelect = 'SELECT id AS "id", email AS "email", name AS "name", password_hash AS "passwordHash", role AS "role", created_at AS "createdAt" FROM users';
   return {
-    async getUserByEmail(email) { return (await query(`${userSelect} WHERE email = :email`, { email }))[0] || null; },
-    async getUserById(id) { return (await query(`${userSelect} WHERE id = :id`, { id }))[0] || null; },
-    async listUsers() { return query('SELECT id AS "id", email AS "email", name AS "name", role AS "role", created_at AS "createdAt" FROM users ORDER BY created_at DESC'); },
+    async getUserByEmail(email) {
+      return (await query(`${userSelect} WHERE email = :email`, { email }))[0] || null;
+    },
+    async getUserById(id) {
+      return (await query(`${userSelect} WHERE id = :id`, { id }))[0] || null;
+    },
+    async listUsers() {
+      return query(`SELECT id AS "id", email AS "email", name AS "name", role AS "role",
+        created_at AS "createdAt" FROM users ORDER BY created_at DESC`);
+    },
     async createUser(user) {
-      await execute('INSERT INTO users (id,email,name,password_hash,role,created_at) VALUES (:id,:email,:name,:passwordHash,:role,:createdAt)', user);
+      await execute(`INSERT INTO users (id,email,name,password_hash,role,created_at)
+        VALUES (:id,:email,:name,:passwordHash,:role,:createdAt)`, user);
       return user;
     },
+    async deleteViewer(id) {
+      const result = await execute("DELETE FROM users WHERE id = :id AND role = 'viewer'", { id });
+      return result.rowsAffected > 0;
+    },
     async createSession(tokenHash, userId, expiresAt) {
-      await execute('INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (:tokenHash,:userId,:expiresAt)', { tokenHash, userId, expiresAt });
+      await execute(`INSERT INTO sessions (token_hash,user_id,expires_at)
+        VALUES (:tokenHash,:userId,:expiresAt)`, { tokenHash, userId, expiresAt });
     },
     async getSession(tokenHash) {
-      return (await query('SELECT user_id AS "userId", expires_at AS "expiresAt" FROM sessions WHERE token_hash = :tokenHash', { tokenHash }))[0] || null;
+      return (await query(`SELECT user_id AS "userId", expires_at AS "expiresAt"
+        FROM sessions WHERE token_hash = :tokenHash`, { tokenHash }))[0] || null;
     },
-    async deleteSession(tokenHash) { await execute('DELETE FROM sessions WHERE token_hash = :tokenHash', { tokenHash }); },
+    async deleteSession(tokenHash) {
+      await execute('DELETE FROM sessions WHERE token_hash = :tokenHash', { tokenHash });
+    },
     async listQualityRecords(from, to) {
       return query(`SELECT id AS "id", report_date AS "date", row_order AS "rowOrder",
         shift AS "shift", lot AS "lot", product AS "product", received AS "received",
@@ -70,23 +96,28 @@ export async function createOracleRepository(config) {
             VALUES (:id,:recordKey,:reportDate,:rowOrder,:shift,:lot,:product,:received,
             :pendingStart,:inspected,:approved,:rejected,:waste,:pendingEnd,:staff,
             :hoursPerPerson,:observations,:uploadedBy,:uploadedAt,:sourceName)`,
-            { id, recordKey, reportDate: record.date, rowOrder: record.row, shift: record.shift,
-              lot: record.lot, product: record.product, received: record.received,
-              pendingStart: record.pendingStart, inspected: record.inspected,
-              approved: record.approved, rejected: record.rejected, waste: record.waste,
-              pendingEnd: record.pendingEnd, staff: record.staff,
-              hoursPerPerson: record.hoursPerPerson, observations: record.observations || null,
-              uploadedBy, uploadedAt, sourceName });
+            {
+              id, recordKey, reportDate: record.date, rowOrder: record.row,
+              shift: record.shift, lot: record.lot, product: record.product,
+              received: record.received, pendingStart: record.pendingStart,
+              inspected: record.inspected, approved: record.approved,
+              rejected: record.rejected, waste: record.waste, pendingEnd: record.pendingEnd,
+              staff: record.staff, hoursPerPerson: record.hoursPerPerson,
+              observations: record.observations || null, uploadedBy, uploadedAt, sourceName,
+            });
         }
         for (const incident of incidents) {
           await connection.execute(`INSERT INTO quality_incidents
             (id,record_id,report_date,lot,product,defect,affected,action,observation,responsible)
             VALUES (:id,:recordId,:reportDate,:lot,:product,:defect,:affected,:action,
             :observation,:responsible)`,
-            { id: randomUUID(), recordId: ids.get(incident.recordKey), reportDate: incident.date,
-              lot: incident.lot, product: incident.product, defect: incident.defect,
-              affected: incident.affected, action: incident.action || null,
-              observation: incident.observation || null, responsible: incident.responsible || null });
+            {
+              id: randomUUID(), recordId: ids.get(incident.recordKey),
+              reportDate: incident.date, lot: incident.lot, product: incident.product,
+              defect: incident.defect, affected: incident.affected,
+              action: incident.action || null, observation: incident.observation || null,
+              responsible: incident.responsible || null,
+            });
         }
         await connection.commit();
       } catch (error) {

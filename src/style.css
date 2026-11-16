@@ -894,6 +894,34 @@ tr:last-child td {
   color: #2d6bdb;
 }
 
+.delete-user {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #9b5960;
+  cursor: pointer;
+}
+
+.delete-user:hover {
+  background: #fff0f1;
+  color: #bd303d;
+}
+
+.delete-user:focus-visible {
+  outline: 2px solid #bd303d;
+  outline-offset: 2px;
+}
+
+.delete-user:disabled {
+  opacity: .5;
+  cursor: wait;
+}
+
 .create-card form {
   display: grid;
   gap: 14px;

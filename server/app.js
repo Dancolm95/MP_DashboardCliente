@@ -10,10 +10,18 @@ import { buildDashboard } from './quality.js';
 const DAY = 24 * 60 * 60 * 1000;
 const LOGIN_WINDOW = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
-const bad = (message, status = 400) => { const error = new Error(message); error.status = status; throw error; };
+const bad = (message, status = 400) => {
+  const error = new Error(message);
+  error.status = status;
+  throw error;
+};
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 const emailOk = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-const dateOk = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+const dateOk = value => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
 
 export function createApp(repo) {
   const app = express();
@@ -32,10 +40,20 @@ export function createApp(repo) {
         }
       }
       next();
-    } catch (error) { next(error); }
+    } catch (error) {
+      next(error);
+    }
   });
-  const requireAuth = (req, _res, next) => req.user ? next() : next(Object.assign(new Error('Inicia sesión para continuar.'), { status: 401 }));
-  const requireAdmin = (req, _res, next) => req.user?.role === 'admin' ? next() : next(Object.assign(new Error('No tienes permiso para esta acción.'), { status: 403 }));
+  const requireAuth = (req, _res, next) => {
+    if (!req.user) return next(Object.assign(new Error('Inicia sesión para continuar.'), { status: 401 }));
+    next();
+  };
+  const requireAdmin = (req, _res, next) => {
+    if (req.user?.role !== 'admin') {
+      return next(Object.assign(new Error('No tienes permiso para esta acción.'), { status: 403 }));
+    }
+    next();
+  };
 
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
   app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: publicUser(req.user) }));
@@ -55,11 +73,16 @@ export function createApp(repo) {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
     const user = await repo.getUserByEmail(email);
-    if (!user || !(await verifyPassword(password, user.passwordHash))) bad('Correo o contraseña incorrectos.', 401);
+    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+      bad('Correo o contraseña incorrectos.', 401);
+    }
     const token = newSessionToken();
     await repo.createSession(tokenHash(token), user.id, new Date(Date.now() + 7 * DAY).toISOString());
     loginAttempts.delete(ip);
-    res.cookie('mp_session', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 7 * DAY });
+    res.cookie('mp_session', token, {
+      httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production',
+      path: '/', maxAge: 7 * DAY,
+    });
     res.json({ user: publicUser(user) });
   }));
   app.post('/api/auth/logout', requireAuth, asyncRoute(async (req, res) => {
@@ -72,30 +95,63 @@ export function createApp(repo) {
     const to = String(req.query.to || new Date().toISOString().slice(0, 10));
     const from = String(req.query.from || new Date(Date.now() - 29 * DAY).toISOString().slice(0, 10));
     if (!dateOk(from) || !dateOk(to) || from > to) bad('Selecciona un rango de fechas válido.');
-    const [records, incidents] = await Promise.all([repo.listQualityRecords(from, to), repo.listQualityIncidents(from, to)]);
-    res.json(buildDashboard(records, incidents, { shift: String(req.query.shift || ''), product: String(req.query.product || '') }));
+    const [records, incidents] = await Promise.all([
+      repo.listQualityRecords(from, to),
+      repo.listQualityIncidents(from, to),
+    ]);
+    res.json(buildDashboard(records, incidents, {
+      shift: String(req.query.shift || ''),
+      product: String(req.query.product || ''),
+    }));
   }));
   app.get('/api/users', requireAuth, requireAdmin, asyncRoute(async (_req, res) => res.json({ users: await repo.listUsers() })));
   app.post('/api/users', requireAuth, requireAdmin, asyncRoute(async (req, res) => {
     const name = String(req.body?.name || '').trim();
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
-    if (req.body?.role !== undefined && req.body.role !== 'viewer') bad('Solo se pueden crear cuentas de visualización.', 403);
-    if (name.length < 2 || name.length > 100 || !emailOk(email) || email.length > 255 || password.length < 10) bad('Ingresa nombre, correo válido y contraseña de al menos 10 caracteres.');
+    if (req.body?.role !== undefined && req.body.role !== 'viewer') {
+      bad('Solo se pueden crear cuentas de visualización.', 403);
+    }
+    if (name.length < 2 || name.length > 100 || !emailOk(email)
+      || email.length > 255 || password.length < 8) {
+      bad('Ingresa nombre, correo válido y contraseña de al menos 10 caracteres.');
+    }
     if (await repo.getUserByEmail(email)) bad('Ya existe una cuenta con ese correo.', 409);
-    const user = { id: randomUUID(), name, email, passwordHash: await hashPassword(password), role: 'viewer', createdAt: new Date().toISOString() };
+    const user = {
+      id: randomUUID(), name, email, passwordHash: await hashPassword(password),
+      role: 'viewer', createdAt: new Date().toISOString(),
+    };
     try { await repo.createUser(user); }
-    catch (error) { if (error.message?.includes('UNIQUE') || error.errorNum === 1) bad('Ya existe una cuenta con ese correo.', 409); throw error; }
+    catch (error) {
+      if (error.message?.includes('UNIQUE') || error.errorNum === 1) {
+        bad('Ya existe una cuenta con ese correo.', 409);
+      }
+      throw error;
+    }
     res.status(201).json({ user: publicUser(user) });
+  }));
+  app.delete('/api/users/:id', requireAuth, requireAdmin, asyncRoute(async (req, res) => {
+    const { id } = req.params;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      bad('Identificador de usuario inválido.');
+    }
+    const user = await repo.getUserById(id);
+    if (!user) bad('La cuenta no existe.', 404);
+    if (user.role !== 'viewer') bad('No se puede eliminar una cuenta administradora.', 403);
+    if (!(await repo.deleteViewer(id))) bad('La cuenta no existe.', 404);
+    res.status(204).end();
   }));
   app.post('/api/uploads', requireAuth, requireAdmin,
     express.raw({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', limit: '2mb' }),
     asyncRoute(async (req, res) => {
       if (!Buffer.isBuffer(req.body) || !req.body.length) bad('Selecciona un archivo .xlsx válido.');
       const { records, incidents, warnings } = await parseQualityWorkbook(req.body);
-      const sourceName = String(req.headers['x-file-name'] || 'indicadores.xlsx').replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 100);
+      const sourceName = String(req.headers['x-file-name'] || 'indicadores.xlsx')
+        .replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 100);
       await repo.insertQualityBatch({ records, incidents, uploadedBy: req.user.id, sourceName });
-      res.status(201).json({ recordCount: records.length, incidentCount: incidents.length, warnings });
+      res.status(201).json({
+        recordCount: records.length, incidentCount: incidents.length, warnings,
+      });
     }));
 
   if (existsSync(resolve('dist'))) app.use(express.static(resolve('dist')));

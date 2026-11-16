@@ -18,7 +18,7 @@ npm run seed
 npm run dev
 ```
 
-Abre `http://127.0.0.1:5173`. `npm run seed` crea el único administrador; el dashboard inicia vacío. Ese administrador puede crear cuentas de visualización desde **Usuarios** y subir los archivos nocturnos desde **Cargar Excel**. Si ya existe un administrador con otro correo, `seed` se detiene en lugar de crear otro.
+Abre `http://127.0.0.1:5173`. `npm run seed` crea el único administrador; el dashboard inicia vacío. Ese administrador puede crear y eliminar cuentas de visualización desde **Usuarios** y subir los archivos nocturnos desde **Cargar Excel**. Al eliminar una cuenta de visualización, sus sesiones dejan de funcionar. La cuenta administradora no se puede eliminar desde la aplicación. Si ya existe un administrador con otro correo, `seed` se detiene en lugar de crear otro.
 
 El login admite hasta cinco intentos por dirección IP en 15 minutos. El contador se guarda en memoria y se reinicia al reiniciar la API.
 

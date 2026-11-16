@@ -26,89 +26,165 @@ async function workbook(shift = 'Diurno') {
   return Buffer.from(await book.xlsx.writeBuffer());
 }
 
-test('login, límite de intentos, importación, filtros e incidencias', async t => {
+async function withServer(run) {
   const repo = createSqliteRepository(':memory:');
   const password = 'ExamplePass123!';
-  await repo.createUser({ id: randomUUID(), email: 'admin@test.local', name: 'Admin', passwordHash: await hashPassword(password), role: 'admin', createdAt: new Date().toISOString() });
-  await repo.createUser({ id: randomUUID(), email: 'viewer@test.local', name: 'Viewer', passwordHash: await hashPassword(password), role: 'viewer', createdAt: new Date().toISOString() });
+  await repo.createUser({
+    id: randomUUID(), email: 'admin@test.local', name: 'Admin',
+    passwordHash: await hashPassword(password), role: 'admin',
+    createdAt: new Date().toISOString(),
+  });
+  await repo.createUser({
+    id: randomUUID(), email: 'viewer@test.local', name: 'Viewer',
+    passwordHash: await hashPassword(password), role: 'viewer',
+    createdAt: new Date().toISOString(),
+  });
   const server = createApp(repo).listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   const request = (path, options = {}) => fetch(`${base}/api${path}`, options);
-  async function login(email) {
-    const res = await request('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
-    assert.equal(res.status, 200);
-    return res.headers.get('set-cookie').split(';')[0];
+  const login = async email => {
+    const response = await request('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    assert.equal(response.status, 200);
+    return response.headers.get('set-cookie').split(';')[0];
+  };
+  try { await run({ repo, request, login, password }); }
+  finally {
+    await new Promise(resolve => server.close(resolve));
+    await repo.close();
   }
-  try {
+}
+
+const createUser = (request, cookie, body) => request('/users', {
+  method: 'POST',
+  headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+});
+const upload = (request, cookie, xlsx) => request('/uploads', {
+  method: 'POST',
+  headers: {
+    Cookie: cookie,
+    'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'X-File-Name': 'control.xlsx',
+  },
+  body: xlsx,
+});
+const dashboard = (request, cookie, query) => request(`/dashboard?${query}`, {
+  headers: { Cookie: cookie },
+}).then(response => response.json());
+
+test('login, permisos y cierre de sesión', async () => {
+  await withServer(async ({ repo, request, login, password }) => {
     assert.equal((await request('/dashboard')).status, 401);
     const admin = await login('admin@test.local');
     const viewer = await login('viewer@test.local');
-    const empty = await request('/dashboard?from=2026-11-01&to=2026-11-30', { headers: { Cookie: viewer } }).then(r => r.json());
+    assert.equal((await request('/users', { headers: { Cookie: viewer } })).status, 403);
+    assert.equal((await request('/template', { headers: { Cookie: admin } })).status, 404);
+
+    const newUser = { name: 'New Viewer', email: 'new@test.local', password: 'Password123!' };
+    assert.equal((await createUser(request, viewer, newUser)).status, 403);
+    assert.equal((await createUser(request, admin, { ...newUser, role: 'admin' })).status, 403);
+    const created = await createUser(request, admin, newUser);
+    assert.equal(created.status, 201);
+    assert.equal((await created.json()).user.role, 'viewer');
+    assert.equal((await repo.listUsers()).filter(user => user.role === 'admin').length, 1);
+
+    const adminId = (await repo.getUserByEmail('admin@test.local')).id;
+    const viewerId = (await repo.getUserByEmail('viewer@test.local')).id;
+    const remove = (cookie, id) => request(`/users/${id}`, {
+      method: 'DELETE', headers: { Cookie: cookie },
+    });
+    assert.equal((await request(`/users/${viewerId}`, { method: 'DELETE' })).status, 401);
+    assert.equal((await remove(viewer, viewerId)).status, 403);
+    assert.equal((await remove(admin, adminId)).status, 403);
+    assert.equal((await remove(admin, 'invalid-id')).status, 400);
+    assert.equal((await remove(admin, randomUUID())).status, 404);
+    assert.ok(await repo.getUserById(adminId));
+
+    assert.equal((await request('/auth/logout', {
+      method: 'POST', headers: { Cookie: viewer },
+    })).status, 200);
+    assert.equal((await request('/dashboard', { headers: { Cookie: viewer } })).status, 401);
+    assert.equal((await request('/auth/me', { headers: { Cookie: viewer } })).status, 401);
+
+    const activeViewer = await login('viewer@test.local');
+    assert.equal((await remove(admin, viewerId)).status, 204);
+    assert.equal(await repo.getUserById(viewerId), null);
+    assert.equal((await request('/auth/me', { headers: { Cookie: activeViewer } })).status, 401);
+    assert.equal((await request('/dashboard', { headers: { Cookie: activeViewer } })).status, 401);
+    assert.equal((await request('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'viewer@test.local', password }),
+    })).status, 401);
+    assert.equal((await remove(admin, viewerId)).status, 404);
+  });
+});
+
+test('importación, indicadores y filtros', async () => {
+  await withServer(async ({ repo, request, login }) => {
+    const admin = await login('admin@test.local');
+    const viewer = await login('viewer@test.local');
+    const query = 'from=2026-11-01&to=2026-11-30';
+    const empty = await dashboard(request, viewer, query);
     assert.equal(empty.records.length, 0);
     assert.equal(empty.summary.pendingEnd, null);
     assert.equal(empty.summary.available, 0);
     assert.equal(empty.summary.approvalRate, 0);
+
     const xlsx = await workbook();
-    const upload = cookie => request('/uploads', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'X-File-Name': 'control.xlsx' }, body: xlsx });
-    assert.equal((await upload(viewer)).status, 403);
-    const invalidShift = await workbook('Tarde');
-    assert.equal((await request('/uploads', { method: 'POST', headers: { Cookie: admin, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }, body: invalidShift })).status, 400);
-    assert.equal((await request('/users', { headers: { Cookie: viewer } })).status, 403);
-    const newUser = { name: 'New Viewer', email: 'new@test.local', password: 'Password123!' };
-    const createUser = (cookie, body) => request('/users', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    assert.equal((await createUser(viewer, newUser)).status, 403);
-    assert.equal((await createUser(admin, { ...newUser, role: 'admin' })).status, 403);
-    const created = await createUser(admin, newUser);
-    assert.equal(created.status, 201);
-    assert.equal((await created.json()).user.role, 'viewer');
-    assert.equal((await repo.listUsers()).filter(user => user.role === 'admin').length, 1);
-    assert.equal((await request('/template', { headers: { Cookie: admin } })).status, 404);
-    const added = await upload(admin);
+    assert.equal((await upload(request, viewer, xlsx)).status, 403);
+    assert.equal((await upload(request, admin, await workbook('Tarde'))).status, 400);
+    const added = await upload(request, admin, xlsx);
     assert.equal(added.status, 201);
     const result = await added.json();
     assert.equal(result.recordCount, 2);
     assert.equal(result.incidentCount, 2);
     assert.equal(result.warnings.length, 1);
-    const dashboard = await request('/dashboard?from=2026-11-01&to=2026-11-30', { headers: { Cookie: viewer } }).then(r => r.json());
-    assert.equal(dashboard.summary.received, 30);
-    assert.equal(dashboard.summary.inspected, 27);
-    assert.equal(dashboard.summary.approved, 22);
-    assert.equal(dashboard.summary.rejected, 5);
-    assert.equal(dashboard.summary.openingPending, 0);
-    assert.equal(dashboard.summary.available, 30);
-    assert.equal(dashboard.summary.pendingToInspect, 3);
-    assert.equal(dashboard.summary.approvalRate, 22 / 30 * 100);
-    assert.equal(dashboard.summary.rejectionRate, 5 / 30 * 100);
-    assert.equal(dashboard.summary.pendingEnd, 3);
-    assert.deepEqual(
-      dashboard.daily.map(({ pendingStart, received, inspected, approved, rejected }) => ({ pendingStart, received, inspected, approved, rejected })),
-      [
-        { pendingStart: 0, received: 20, inspected: 15, approved: 12, rejected: 3 },
-        { pendingStart: 5, received: 10, inspected: 12, approved: 10, rejected: 2 },
-      ],
-    );
-    assert.deepEqual(
-      dashboard.records.map(({ received, pendingStart, inspected, pendingEnd }) => ({ received, pendingStart, inspected, pendingEnd })),
-      [
-        { received: 10, pendingStart: 5, inspected: 12, pendingEnd: 3 },
-        { received: 20, pendingStart: 0, inspected: 15, pendingEnd: 5 },
-      ],
-    );
-    assert.equal(dashboard.incidents.length, 2);
-    assert.deepEqual(dashboard.byShift.map(({ name, received, pendingStart, inspected }) => ({ name, received, pendingStart, inspected })), [
+
+    const full = await dashboard(request, viewer, query);
+    assert.equal(full.summary.received, 30);
+    assert.equal(full.summary.inspected, 27);
+    assert.equal(full.summary.approved, 22);
+    assert.equal(full.summary.rejected, 5);
+    assert.equal(full.summary.openingPending, 0);
+    assert.equal(full.summary.available, 30);
+    assert.equal(full.summary.pendingToInspect, 3);
+    assert.equal(full.summary.approvalRate, 22 / 30 * 100);
+    assert.equal(full.summary.rejectionRate, 5 / 30 * 100);
+    assert.equal(full.summary.pendingEnd, 3);
+    assert.deepEqual(full.daily.map(({ pendingStart, received, inspected, approved, rejected }) =>
+      ({ pendingStart, received, inspected, approved, rejected })), [
+      { pendingStart: 0, received: 20, inspected: 15, approved: 12, rejected: 3 },
+      { pendingStart: 5, received: 10, inspected: 12, approved: 10, rejected: 2 },
+    ]);
+    assert.deepEqual(full.records.map(({ received, pendingStart, inspected, pendingEnd }) =>
+      ({ received, pendingStart, inspected, pendingEnd })), [
+      { received: 10, pendingStart: 5, inspected: 12, pendingEnd: 3 },
+      { received: 20, pendingStart: 0, inspected: 15, pendingEnd: 5 },
+    ]);
+    assert.equal(full.incidents.length, 2);
+    assert.deepEqual(full.byShift.map(({ name, received, pendingStart, inspected }) =>
+      ({ name, received, pendingStart, inspected })), [
       { name: 'Día', received: 30, pendingStart: 5, inspected: 27 },
     ]);
-    const filtered = await request('/dashboard?from=2026-11-01&to=2026-11-30&shift=D%C3%ADa&product=Vajillas', { headers: { Cookie: viewer } }).then(r => r.json());
+
+    const filtered = await dashboard(request, viewer, `${query}&shift=D%C3%ADa&product=Vajillas`);
     assert.equal(filtered.summary.received, 20);
     assert.equal(filtered.summary.available, 20);
     assert.equal(filtered.summary.approvalRate, 12 / 20 * 100);
     assert.equal(filtered.summary.pendingEnd, 3);
-    assert.deepEqual(filtered.daily.map(({ pendingStart, received, inspected, approved, rejected }) => ({ pendingStart, received, inspected, approved, rejected })), [
+    assert.deepEqual(filtered.daily.map(({ pendingStart, received, inspected, approved, rejected }) =>
+      ({ pendingStart, received, inspected, approved, rejected })), [
       { pendingStart: 0, received: 20, inspected: 15, approved: 12, rejected: 3 },
     ]);
     assert.equal(filtered.incidents.length, 1);
-    const oneDay = await request('/dashboard?from=2026-11-03&to=2026-11-03', { headers: { Cookie: viewer } }).then(r => r.json());
+
+    const oneDay = await dashboard(request, viewer, 'from=2026-11-03&to=2026-11-03');
     assert.equal(oneDay.summary.openingPending, 5);
     assert.equal(oneDay.summary.received, 10);
     assert.equal(oneDay.summary.available, 15);
@@ -117,21 +193,27 @@ test('login, límite de intentos, importación, filtros e incidencias', async t 
     assert.equal(oneDay.summary.rejected, 2);
     assert.equal(oneDay.summary.pendingToInspect, 3);
     assert.equal(oneDay.summary.approvalRate, 10 / 15 * 100);
-    assert.equal((await upload(admin)).status, 409);
+
+    assert.equal((await upload(request, admin, xlsx)).status, 409);
     assert.equal((await repo.listQualityRecords('2026-11-01', '2026-11-30')).length, 2);
-    assert.equal((await request('/auth/logout', { method: 'POST', headers: { Cookie: viewer } })).status, 200);
-    assert.equal((await request('/dashboard', { headers: { Cookie: viewer } })).status, 401);
-    assert.equal((await request('/auth/me', { headers: { Cookie: viewer } })).status, 401);
-    const tryLogin = password => request('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@test.local', password }) });
-    for (let count = 0; count < 5; count++) assert.equal((await tryLogin('wrong-password')).status, 401);
+  });
+});
+
+test('límite de intentos de login', async t => {
+  await withServer(async ({ request, password }) => {
+    const tryLogin = passwordValue => request('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@test.local', password: passwordValue }),
+    });
+    for (let count = 0; count < 5; count++) {
+      assert.equal((await tryLogin('wrong-password')).status, 401);
+    }
     const blocked = await tryLogin(password);
     assert.equal(blocked.status, 429);
     assert.ok(Number(blocked.headers.get('retry-after')) > 0);
     const currentTime = Date.now();
     t.mock.method(Date, 'now', () => currentTime + 15 * 60 * 1000 + 1);
     assert.equal((await tryLogin(password)).status, 200);
-  } finally {
-    await new Promise(resolve => server.close(resolve));
-    await repo.close();
-  }
+  });
 });

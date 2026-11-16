@@ -14,7 +14,8 @@ import {
   Mail,
   ArrowRight,
   Database,
-  ShieldCheck
+  ShieldCheck,
+  Trash2
 } from 'lucide-react';
 import './style.css';
 import { QualityContent } from './quality-dashboard.jsx';
@@ -488,6 +489,7 @@ function UploadPage({ onSuccess }) {
 
 function UsersPage({ setNotice }) {
   const [users, setUsers] = useState([]);
+  const [deletingId, setDeletingId] = useState(null);
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -522,6 +524,19 @@ function UsersPage({ setNotice }) {
       setBusy(false);
     }
   }
+  async function removeViewer(user) {
+    if (!window.confirm(`¿Eliminar la cuenta de ${user.name}? Perderá acceso inmediatamente.`)) return;
+    setDeletingId(user.id);
+    try {
+      await api(`/users/${encodeURIComponent(user.id)}`, { method: 'DELETE' });
+      setUsers(current => current.filter(item => item.id !== user.id));
+      setNotice({ type: 'success', text: `Cuenta de ${user.name} eliminada.` });
+    } catch (err) {
+      setNotice({ type: 'error', text: err.message });
+    } finally {
+      setDeletingId(null);
+    }
+  }
   return (
     <>
       <div className="page-head">
@@ -553,6 +568,18 @@ function UsersPage({ setNotice }) {
                 <span className={`role-badge ${u.role}`}>
                   {u.role === 'admin' ? 'Admin' : 'Visualizador'}
                 </span>
+                {u.role === 'viewer' && (
+                  <button
+                    type="button"
+                    className="delete-user"
+                    aria-label={`Eliminar cuenta de ${u.name}`}
+                    title={`Eliminar cuenta de ${u.name}`}
+                    disabled={deletingId === u.id}
+                    onClick={() => removeViewer(u)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -592,9 +619,9 @@ function UsersPage({ setNotice }) {
                 type="password"
                 value={form.password}
                 onChange={e => setForm({ ...form, password: e.target.value })}
-                placeholder="Mínimo 10 caracteres"
+                placeholder="Mínimo 8 caracteres"
                 required
-                minLength="10"
+                minLength="8"
               />
             </label>
             {error && (

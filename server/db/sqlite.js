@@ -11,20 +11,37 @@ export function createSqliteRepository(path) {
   db.exec(readFileSync(new URL('./schema.sqlite.sql', import.meta.url), 'utf8'));
   const userFields = 'id, email, name, password_hash AS passwordHash, role, created_at AS createdAt';
   const repo = {
-    async getUserByEmail(email) { return db.prepare(`SELECT ${userFields} FROM users WHERE email = ?`).get(email) || null; },
-    async getUserById(id) { return db.prepare(`SELECT ${userFields} FROM users WHERE id = ?`).get(id) || null; },
-    async listUsers() { return db.prepare('SELECT id, email, name, role, created_at AS createdAt FROM users ORDER BY created_at DESC').all(); },
+    async getUserByEmail(email) {
+      return db.prepare(`SELECT ${userFields} FROM users WHERE email = ?`).get(email) || null;
+    },
+    async getUserById(id) {
+      return db.prepare(`SELECT ${userFields} FROM users WHERE id = ?`).get(id) || null;
+    },
+    async listUsers() {
+      return db.prepare(`SELECT id, email, name, role, created_at AS createdAt
+        FROM users ORDER BY created_at DESC`).all();
+    },
     async createUser(user) {
-      db.prepare('INSERT INTO users (id,email,name,password_hash,role,created_at) VALUES (?,?,?,?,?,?)').run(user.id, user.email, user.name, user.passwordHash, user.role, user.createdAt);
+      db.prepare(`INSERT INTO users (id,email,name,password_hash,role,created_at)
+        VALUES (?,?,?,?,?,?)`).run(
+        user.id, user.email, user.name, user.passwordHash, user.role, user.createdAt,
+      );
       return user;
     },
+    async deleteViewer(id) {
+      return db.prepare("DELETE FROM users WHERE id = ? AND role = 'viewer'").run(id).changes > 0;
+    },
     async createSession(tokenHash, userId, expiresAt) {
-      db.prepare('INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,?)').run(tokenHash, userId, expiresAt);
+      db.prepare(`INSERT INTO sessions (token_hash,user_id,expires_at)
+        VALUES (?,?,?)`).run(tokenHash, userId, expiresAt);
     },
     async getSession(tokenHash) {
-      return db.prepare('SELECT user_id AS userId, expires_at AS expiresAt FROM sessions WHERE token_hash = ?').get(tokenHash) || null;
+      return db.prepare(`SELECT user_id AS userId, expires_at AS expiresAt
+        FROM sessions WHERE token_hash = ?`).get(tokenHash) || null;
     },
-    async deleteSession(tokenHash) { db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash); },
+    async deleteSession(tokenHash) {
+      db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);
+    },
     async listQualityRecords(from, to) {
       return db.prepare(`SELECT id, report_date AS date, row_order AS rowOrder, shift, lot, product,
         received, pending_start AS pendingStart, inspected, approved, rejected, waste,
@@ -53,17 +70,23 @@ export function createSqliteRepository(path) {
           const id = randomUUID();
           const key = `${record.date}|${record.shift.toLowerCase()}|${record.lot.toLowerCase()}`;
           ids.set(key, id);
-          insertRecord.run(id, key, record.date, record.row, record.shift, record.lot, record.product,
-            record.received, record.pendingStart, record.inspected, record.approved, record.rejected,
-            record.waste, record.pendingEnd, record.staff, record.hoursPerPerson,
-            record.observations, uploadedBy, uploadedAt, sourceName);
+          insertRecord.run(
+            id, key, record.date, record.row, record.shift, record.lot, record.product,
+            record.received, record.pendingStart, record.inspected, record.approved,
+            record.rejected, record.waste, record.pendingEnd, record.staff,
+            record.hoursPerPerson, record.observations, uploadedBy, uploadedAt, sourceName,
+          );
         }
         const insertIncident = db.prepare(`INSERT INTO quality_incidents
           (id,record_id,report_date,lot,product,defect,affected,action,observation,responsible)
           VALUES (?,?,?,?,?,?,?,?,?,?)`);
-        for (const incident of incidents) insertIncident.run(randomUUID(), ids.get(incident.recordKey),
-          incident.date, incident.lot, incident.product, incident.defect, incident.affected,
-          incident.action, incident.observation, incident.responsible);
+        for (const incident of incidents) {
+          insertIncident.run(
+            randomUUID(), ids.get(incident.recordKey), incident.date, incident.lot,
+            incident.product, incident.defect, incident.affected, incident.action,
+            incident.observation, incident.responsible,
+          );
+        }
         db.exec('COMMIT');
       } catch (error) {
         db.exec('ROLLBACK');
