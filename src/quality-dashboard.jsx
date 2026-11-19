@@ -102,12 +102,12 @@ export function QualityContent({ page, dashboard, loading, from, to, setFrom, se
             <KpiCard icon={ClipboardCheck} label="Cajas inspeccionadas" value={fmt.format(summary.inspected)} detail={`${fmt.format(summary.inspectedUnits)} unidades revisadas`} />
             <KpiCard icon={CircleCheck} label="Cajas aprobadas" value={fmt.format(summary.approved)} detail={`${fmt.format(summary.approvalRate)}% de las inspeccionadas`} color="green" />
             <KpiCard icon={LockKeyhole} label="Cajas bloqueadas" value={fmt.format(summary.blocked)} detail={`${fmt.format(summary.blockedRate)}% de las inspeccionadas`} color="orange" />
-            <KpiCard icon={TrendingUp} label="Productividad" value={fmt.format(summary.productivity)} detail="Cajas inspeccionadas / hora trabajada" color="teal" />
+            <KpiCard icon={TrendingUp} label="Productividad" value={fmt.format(summary.productivity)} detail="Cajas por hora-persona" color="teal" />
           </div>
           <div className="quality-secondary">
-            <div><strong>{summary.operatorCount}</strong><span>Operarios en el periodo</span></div>
-            <div><strong>{summary.daysWithRecords}</strong><span>Días con registros</span></div>
-            <div><strong>{fmt.format(summary.hours)} h</strong><span>Horas totales de operarios</span></div>
+            <div><strong>{summary.operatorCount}</strong><span>Operarios en el periodo</span><small>Personas distintas; pueden variar cada día</small></div>
+            <div><strong>{summary.daysWithRecords}</strong><span>Días con registros</span><small>Fechas con actividad en el rango</small></div>
+            <div><strong>{fmt.format(summary.hours)} h</strong><span>Horas-persona acumuladas</span><small>Suma por operario y día</small></div>
             <div><strong>{fmt.format(summary.observed)}</strong><span>Unidades observadas</span></div>
           </div>
           <div className="quality-main-grid">

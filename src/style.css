@@ -1587,6 +1587,14 @@ tr:last-child td {
   margin-top: 5px;
 }
 
+.quality-secondary small {
+  display: block;
+  color: #9aa7b6;
+  font-size: 10px;
+  line-height: 1.4;
+  margin-top: 5px;
+}
+
 .quality-secondary em {
   font-style: normal;
   color: #dc7d3b;

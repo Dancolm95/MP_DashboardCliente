@@ -30,6 +30,7 @@ El login admite cinco intentos por IP en 15 minutos; el contador se guarda en me
 - Cada caja bloqueada tiene entre 1 y 20 unidades observadas. Por tanto: bloqueadas ≤ suma de clasificaciones ≤ bloqueadas × 20. Una caja aprobada no tiene unidades observadas.
 - Cajas y unidades son enteros no negativos. Las horas son mayores que 0 y como máximo 24; admiten decimales. Una jornada trabajada sin inspecciones puede tener todas sus cantidades en 0.
 - Productividad individual = suma de cajas inspeccionadas del operario ÷ suma de sus horas trabajadas. La productividad general usa todas las cajas y todas las horas seleccionadas; no promedia tasas individuales.
+- Horas-persona acumuladas = suma de las horas registradas por cada operario y día. El número de operarios del periodo cuenta personas distintas, aunque no trabajen todos los días; por eso no se multiplican operarios × días para obtener las horas.
 - Días con registros = cantidad de fechas distintas con al menos un consolidado de operario dentro de los filtros. Varios operarios en un mismo día cuentan como un solo día; las fechas sin registros no cuentan.
 - Aprobación = aprobadas ÷ inspeccionadas × 100. Sin inspecciones, las tasas son 0.
 
