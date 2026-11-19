@@ -107,37 +107,18 @@ p {
 }
 
 .brand-mark {
-  width: 36px;
-  height: 36px;
+  width: 142px;
+  height: 64px;
   display: grid;
   place-items: center;
-  border-radius: 11px;
-  background: #225ed5;
-  color: #fff;
-  box-shadow: 0 7px 17px #2462d528;
+  flex: 0 0 auto;
 }
 
-.brand-mark span {
-  font-family: Manrope,sans-serif;
-  font-size: 20px;
-  font-weight: 800;
-  font-style: italic;
-  line-height: 1;
-}
-
-.brand strong {
-  font-family: Manrope,sans-serif;
-  font-size: 15px;
-  font-weight: 800;
+.brand-mark img {
   display: block;
-  letter-spacing: -.4px;
-}
-
-.brand small {
-  display: block;
-  color: #98a3b5;
-  font-size: 10px;
-  margin-top: 2px;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .nav-label {
@@ -318,9 +299,9 @@ p {
 }
 
 .content {
-  max-width: 1500px;
+  max-width: 1700px;
   margin: auto;
-  padding: 40px 43px 70px;
+  padding: 40px 38px 70px;
 }
 
 /* Shared page content and data views */
@@ -1010,13 +991,8 @@ tr:last-child td {
 
 .login-logo .brand-mark {
   background: #fff;
-  color: #245fca;
-  box-shadow: none;
-}
-
-.login-logo strong {
-  font-family: Manrope,sans-serif;
-  font-size: 16px;
+  border-radius: 8px;
+  padding: 5px;
 }
 
 .visual-content {
@@ -1146,8 +1122,20 @@ tr:last-child td {
 .visual-foot {
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 10px;
   color: #a6c3eb;
+}
+
+.visual-foot img,.login-mobile-foot img {
+  width: 46px;
+  height: 22px;
+  padding: 2px;
+  border-radius: 3px;
+  background: #fff;
+  object-fit: contain;
 }
 
 .login-side {
@@ -1229,6 +1217,8 @@ tr:last-child td {
 
 .login-mobile-foot {
   display: none;
+  align-items: center;
+  gap: 5px;
 }
 
 /* Responsive layout */
@@ -1358,7 +1348,7 @@ tr:last-child td {
     flex-direction: column;
   }
   .login-mobile-foot {
-    display: block;
+    display: flex;
     color: #a8b3c1;
     font-size: 10px;
     margin-top: 40px;
@@ -1495,14 +1485,15 @@ tr:last-child td {
 .quality-kpi-grid {
   display: grid;
   grid-template-columns: repeat(4,minmax(0,1fr));
-  gap: 13px;
+  gap: 18px;
 }
 
 .quality-kpi {
   background: #fff;
   border: 1px solid #e4eaf2;
   border-radius: 14px;
-  padding: 19px;
+  padding: 24px;
+  min-height: 158px;
   min-width: 0;
   box-shadow: 0 5px 18px #1e385907;
 }
@@ -1511,18 +1502,18 @@ tr:last-child td {
   display: flex;
   align-items: center;
   gap: 11px;
-  margin-bottom: 16px;
+  margin-bottom: 19px;
 }
 
 .quality-kpi-top span {
   color: #30445e;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
 }
 
 .quality-icon {
-  width: 39px;
-  height: 39px;
+  width: 43px;
+  height: 43px;
   border-radius: 10px;
   display: grid;
   place-items: center;
@@ -1552,7 +1543,7 @@ tr:last-child td {
 .quality-kpi>strong {
   display: block;
   font-family: Manrope,sans-serif;
-  font-size: 28px;
+  font-size: clamp(29px, 2.3vw, 38px);
   letter-spacing: -1px;
   line-height: 1.1;
 }
@@ -1560,7 +1551,7 @@ tr:last-child td {
 .quality-kpi>small {
   display: block;
   color: #8996a7;
-  font-size: 10px;
+  font-size: 11px;
   margin-top: 8px;
 }
 
@@ -1570,7 +1561,7 @@ tr:last-child td {
   background: #fff;
   border: 1px solid #e4eaf2;
   border-radius: 14px;
-  padding: 17px 4px;
+  padding: 21px 4px;
 }
 
 .quality-secondary>div {
@@ -1586,13 +1577,13 @@ tr:last-child td {
   display: block;
   color: #183b64;
   font-family: Manrope,sans-serif;
-  font-size: 20px;
+  font-size: 24px;
 }
 
 .quality-secondary span {
   display: block;
   color: #8a98aa;
-  font-size: 10px;
+  font-size: 11px;
   margin-top: 5px;
 }
 
@@ -1634,7 +1625,7 @@ tr:last-child td {
 }
 
 .quality-chart {
-  height: 245px;
+  height: 290px;
 }
 
 .chart-legend {

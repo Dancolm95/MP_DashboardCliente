@@ -3,6 +3,7 @@ import { readFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DuplicateRecordError } from './index.js';
+import { validateBoxControlBatch } from '../box-control.js';
 
 export function createSqliteRepository(path) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -93,6 +94,66 @@ export function createSqliteRepository(path) {
         if (error.message?.includes('quality_records.record_key')) throw new DuplicateRecordError();
         throw error;
       }
+    },
+    async createOperator(operatorId) {
+      if (typeof operatorId !== 'string' || !operatorId.trim()
+        || operatorId !== operatorId.trim() || operatorId.length > 50) {
+        throw new Error('Identificador de operario inválido.');
+      }
+      db.prepare('INSERT INTO operarios (id_operario) VALUES (?)').run(operatorId);
+    },
+    async insertBoxControlBatch(batch) {
+      validateBoxControlBatch(batch);
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const insertDay = db.prepare(`INSERT INTO trabajo_diario_operario
+          (id_operario, fecha, horas_trabajadas) VALUES (?, ?, ?)`);
+        const insertBox = db.prepare(`INSERT INTO cajas (codigo, fecha, id_operario)
+          VALUES (?, ?, ?)`);
+        const insertComposition = db.prepare(`INSERT INTO composicion_caja
+          (codigo_caja, momento, optimas) VALUES (?, ?, ?)`);
+        const insertDetail = db.prepare(`INSERT INTO detalle_composicion
+          (codigo_caja, momento, id_clasificacion, cantidad) VALUES (?, ?, ?, ?)`);
+        for (const day of batch.workDays) insertDay.run(day.operatorId, day.date, day.hours);
+        for (const box of batch.boxes) {
+          insertBox.run(box.code, box.date, box.operatorId);
+          for (const moment of ['inicial', 'cierre']) {
+            const composition = box[moment];
+            insertComposition.run(box.code, moment, composition.optimal);
+            for (const detail of composition.details) {
+              insertDetail.run(box.code, moment, detail.classificationId, detail.quantity);
+            }
+          }
+        }
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+    },
+    async listBoxControl(from, to) {
+      const workDays = db.prepare(`SELECT id_operario AS operatorId, fecha AS date,
+        horas_trabajadas AS hours FROM trabajo_diario_operario
+        WHERE fecha BETWEEN ? AND ? ORDER BY fecha, id_operario`).all(from, to);
+      const boxes = db.prepare(`SELECT codigo AS code, fecha AS date,
+        id_operario AS operatorId FROM cajas
+        WHERE fecha BETWEEN ? AND ? ORDER BY fecha, codigo`).all(from, to);
+      const snapshots = db.prepare(`SELECT c.codigo_caja AS code, c.momento AS moment,
+        c.optimas AS optimal, d.id_clasificacion AS classificationId,
+        d.cantidad AS quantity FROM composicion_caja c
+        JOIN cajas b ON b.codigo = c.codigo_caja
+        LEFT JOIN detalle_composicion d ON d.codigo_caja = c.codigo_caja
+          AND d.momento = c.momento
+        WHERE b.fecha BETWEEN ? AND ? ORDER BY c.codigo_caja, c.momento`).all(from, to);
+      const byCode = new Map(boxes.map(box => [box.code, box]));
+      for (const row of snapshots) {
+        const box = byCode.get(row.code);
+        if (!box[row.moment]) box[row.moment] = { optimal: row.optimal, details: [] };
+        if (row.classificationId) box[row.moment].details.push({
+          classificationId: row.classificationId, quantity: row.quantity,
+        });
+      }
+      return { workDays, boxes };
     },
     async close() { db.close(); },
   };

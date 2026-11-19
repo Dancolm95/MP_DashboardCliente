@@ -128,11 +128,7 @@ function App() {
       <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
         <div className="brand">
           <div className="brand-mark">
-            <span>M</span>
-          </div>
-          <div>
-            <strong>MP Dashboard</strong>
-            <small>Panel de indicadores</small>
+            <img src="/Logo%20MP360.svg" alt="MP360" />
           </div>
           <button className="mobile-close" onClick={() => setMobileOpen(false)}>
             <X size={20} />
@@ -271,9 +267,8 @@ function Login({ onLogin }) {
       <div className="login-visual">
         <div className="login-logo">
           <div className="brand-mark">
-            <span>M</span>
+            <img src="/Logo%20MP360.svg" alt="MP360" />
           </div>
-          <strong>MP Dashboard</strong>
         </div>
         <div className="visual-content">
           <div className="visual-tag">
@@ -310,7 +305,8 @@ function Login({ onLogin }) {
           </div>
         </div>
         <div className="visual-foot">
-          © {new Date().getFullYear()} MP Dashboard · Control en cada dato
+          © {new Date().getFullYear()}
+          <span>Manpower Logistic · Control en cada dato</span>
         </div>
       </div>
       <div className="login-side">
@@ -369,7 +365,8 @@ function Login({ onLogin }) {
           </div>
         </div>
         <div className="login-mobile-foot">
-          © {new Date().getFullYear()} MP Dashboard
+          © {new Date().getFullYear()}
+          <img src="/Logo%20MP360.svg" alt="MP360" />
         </div>
       </div>
     </div>
