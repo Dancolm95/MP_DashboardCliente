@@ -106,7 +106,6 @@ export function QualityContent({ page, dashboard, loading, from, to, setFrom, se
           </div>
           <div className="quality-secondary">
             <div><strong>{summary.operatorCount}</strong><span>Operarios en el periodo</span></div>
-            <div><strong>{summary.workDays}</strong><span>Jornadas registradas</span></div>
             <div><strong>{fmt.format(summary.hours)} h</strong><span>Horas trabajadas</span></div>
             <div><strong>{fmt.format(summary.observed)}</strong><span>Unidades observadas</span></div>
           </div>
