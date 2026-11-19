@@ -6,6 +6,7 @@ import { DuplicateRecordError } from './db/index.js';
 import { hashPassword, verifyPassword, newSessionToken, tokenHash, publicUser } from './security.js';
 import { parseQualityWorkbook } from './import.js';
 import { buildDashboard } from './quality.js';
+import { validDate } from './box-control.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const LOGIN_WINDOW = 15 * 60 * 1000;
@@ -17,11 +18,7 @@ const bad = (message, status = 400) => {
 };
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 const emailOk = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-const dateOk = value => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
-};
+
 
 export function createApp(repo) {
   const app = express();
@@ -91,18 +88,16 @@ export function createApp(repo) {
     res.json({ ok: true });
   }));
 
-  app.get('/api/dashboard', requireAuth, asyncRoute(async (req, res) => {
+  const requireQualityV2 = (_req, _res, next) => {
+    if (repo.qualityVersion !== 2) return next(Object.assign(new Error('Calidad V2 requiere el adaptador SQLite.'), { status: 503 }));
+    next();
+  };
+  app.get('/api/dashboard', requireAuth, requireQualityV2, asyncRoute(async (req, res) => {
     const to = String(req.query.to || new Date().toISOString().slice(0, 10));
     const from = String(req.query.from || new Date(Date.now() - 29 * DAY).toISOString().slice(0, 10));
-    if (!dateOk(from) || !dateOk(to) || from > to) bad('Selecciona un rango de fechas válido.');
-    const [records, incidents] = await Promise.all([
-      repo.listQualityRecords(from, to),
-      repo.listQualityIncidents(from, to),
-    ]);
-    res.json(buildDashboard(records, incidents, {
-      shift: String(req.query.shift || ''),
-      product: String(req.query.product || ''),
-    }));
+    if (!validDate(from) || !validDate(to) || from > to) bad('Selecciona un rango de fechas válido.');
+    const records = await repo.listQualityRecords(from, to);
+    res.json(buildDashboard(records, { operator: String(req.query.operator || '') }));
   }));
   app.get('/api/users', requireAuth, requireAdmin, asyncRoute(async (_req, res) => res.json({ users: await repo.listUsers() })));
   app.post('/api/users', requireAuth, requireAdmin, asyncRoute(async (req, res) => {
@@ -141,16 +136,16 @@ export function createApp(repo) {
     if (!(await repo.deleteViewer(id))) bad('La cuenta no existe.', 404);
     res.status(204).end();
   }));
-  app.post('/api/uploads', requireAuth, requireAdmin,
+  app.post('/api/uploads', requireAuth, requireAdmin, requireQualityV2,
     express.raw({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', limit: '2mb' }),
     asyncRoute(async (req, res) => {
       if (!Buffer.isBuffer(req.body) || !req.body.length) bad('Selecciona un archivo .xlsx válido.');
-      const { records, incidents, warnings } = await parseQualityWorkbook(req.body);
+      const { records } = await parseQualityWorkbook(req.body);
       const sourceName = String(req.headers['x-file-name'] || 'indicadores.xlsx')
         .replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 100);
-      await repo.insertQualityBatch({ records, incidents, uploadedBy: req.user.id, sourceName });
+      await repo.insertQualityBatch({ records, uploadedBy: req.user.id, sourceName });
       res.status(201).json({
-        recordCount: records.length, incidentCount: incidents.length, warnings,
+        recordCount: records.length,
       });
     }));
 

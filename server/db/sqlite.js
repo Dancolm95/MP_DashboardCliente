@@ -33,6 +33,7 @@ export function createSqliteRepository(path) {
   }
   const userFields = 'id, email, name, password_hash AS passwordHash, role, created_at AS createdAt';
   const repo = {
+    qualityVersion: 2,
     async getUserByEmail(email) {
       return db.prepare(`SELECT ${userFields} FROM users WHERE email = ?`).get(email) || null;
     },

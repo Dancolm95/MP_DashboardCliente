@@ -31,6 +31,7 @@ export async function readWorkbook(buffer) {
     shared = many(strings?.si).map(richText);
   }
   const sheets = new Map();
+  sheets.date1904 = ['1', 'true'].includes(String(book.workbookPr?.['@_date1904']));
   for (const item of many(book.sheets?.sheet)) {
     const target = paths.get(item['@_id']);
     if (!target) throw new Error(`No se encontró la hoja ${item['@_name']}.`);
@@ -43,8 +44,12 @@ export async function readWorkbook(buffer) {
         const column = String(cell['@_r'] || '').match(/^[A-Z]+/)?.[0];
         if (!column) continue;
         let value = cell.v;
+        if (cell.f !== undefined && (value === undefined || value === '')) {
+          throw new Error(`Recalcula y guarda el Excel: la celda ${cell['@_r']} no tiene resultado de fórmula.`);
+        }
         if (cell['@_t'] === 's') value = shared[Number(value)];
         else if (cell['@_t'] === 'inlineStr') value = richText(cell.is);
+        else if (cell['@_t'] === 'b') value = value === '1';
         else if (value !== undefined && value !== '' && cell['@_t'] !== 'str' && cell['@_t'] !== 'e') value = Number(value);
         cells[column] = value ?? '';
       }

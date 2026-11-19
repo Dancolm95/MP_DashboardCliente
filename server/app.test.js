@@ -1,30 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import ExcelJS from 'exceljs';
+import { exampleRecords, workbook } from './test-fixtures.js';
 import { createSqliteRepository } from './db/sqlite.js';
 import { createApp } from './app.js';
 import { hashPassword } from './security.js';
-
-async function workbook(shift = 'Diurno') {
-  const book = new ExcelJS.Workbook();
-  const control = book.addWorksheet('CONTROL_DIARIO');
-  control.addRow(['Fecha', 'Turno', 'Lote / referencia', 'Producto', 'Cajas recibidas', 'Pendientes iniciales', 'Cajas inspeccionadas', 'Cajas aprobadas', 'Cajas rechazadas', 'Cajas con merma*', 'Pendientes finales', 'Personal asignado', 'Horas efectivas / persona']);
-  control.addRow(['2026-11-02', 'Día', 'L-001', 'Vajillas', 20, 0, 15, 12, 3, 1, 5, 2, 8]);
-  control.addRow(['2026-11-03', shift, 'L-002', 'Platos', 10, 5, 12, 10, 2, 1, 3, 2, 8]);
-  const incidents = book.addWorksheet('INCIDENCIAS');
-  incidents.addRow(['Fecha', 'Lote / referencia', 'Producto', 'Tipo de defecto', 'Cajas afectadas', 'Acción / destino', 'Observación', 'Responsable']);
-  incidents.addRow(['2026-11-02', 'L-001', 'Vajillas', 'Rotura', 2, 'Merma', '', 'Supervisor']);
-  incidents.addRow(['2026-11-03', 'L-002', 'Platos', 'Fisura', 1, 'Reproceso', '', 'Supervisor']);
-  const summary = book.addWorksheet('RESUMEN_KPI');
-  summary.addRow(['Indicador', 'Valor']);
-  summary.addRow(['Cajas recibidas', 31]);
-  summary.addRow(['Cajas inspeccionadas', 27]);
-  summary.addRow(['Cajas aprobadas', 22]);
-  summary.addRow(['Cajas rechazadas', 5]);
-  summary.addRow(['Cajas con merma (informativo)', 2]);
-  return Buffer.from(await book.xlsx.writeBuffer());
-}
 
 async function withServer(run) {
   const repo = createSqliteRepository(':memory:');
@@ -125,77 +105,61 @@ test('login, permisos y cierre de sesión', async () => {
   });
 });
 
-test('importación, indicadores y filtros', async () => {
+test('Excel V2 llega a indicadores; sesión, permisos, filtros y duplicados', async () => {
   await withServer(async ({ repo, request, login }) => {
     const admin = await login('admin@test.local');
     const viewer = await login('viewer@test.local');
     const query = 'from=2026-11-01&to=2026-11-30';
     const empty = await dashboard(request, viewer, query);
     assert.equal(empty.records.length, 0);
-    assert.equal(empty.summary.pendingEnd, null);
-    assert.equal(empty.summary.available, 0);
+    assert.equal(empty.summary.productivity, 0);
     assert.equal(empty.summary.approvalRate, 0);
-
     const xlsx = await workbook();
+    assert.equal((await request('/uploads', { method: 'POST', body: xlsx })).status, 401);
     assert.equal((await upload(request, viewer, xlsx)).status, 403);
-    assert.equal((await upload(request, admin, await workbook('Tarde'))).status, 400);
+    assert.equal((await upload(request, admin, Buffer.from('invalid'))).status, 400);
     const added = await upload(request, admin, xlsx);
     assert.equal(added.status, 201);
-    const result = await added.json();
-    assert.equal(result.recordCount, 2);
-    assert.equal(result.incidentCount, 2);
-    assert.equal(result.warnings.length, 1);
-
+    assert.deepEqual(await added.json(), { recordCount: 3 });
     const full = await dashboard(request, viewer, query);
-    assert.equal(full.summary.received, 30);
-    assert.equal(full.summary.inspected, 27);
-    assert.equal(full.summary.approved, 22);
-    assert.equal(full.summary.rejected, 5);
-    assert.equal(full.summary.openingPending, 0);
-    assert.equal(full.summary.available, 30);
-    assert.equal(full.summary.pendingToInspect, 3);
-    assert.equal(full.summary.approvalRate, 22 / 30 * 100);
-    assert.equal(full.summary.rejectionRate, 5 / 30 * 100);
-    assert.equal(full.summary.pendingEnd, 3);
-    assert.deepEqual(full.daily.map(({ pendingStart, received, inspected, approved, rejected }) =>
-      ({ pendingStart, received, inspected, approved, rejected })), [
-      { pendingStart: 0, received: 20, inspected: 15, approved: 12, rejected: 3 },
-      { pendingStart: 5, received: 10, inspected: 12, approved: 10, rejected: 2 },
-    ]);
-    assert.deepEqual(full.records.map(({ received, pendingStart, inspected, pendingEnd }) =>
-      ({ received, pendingStart, inspected, pendingEnd })), [
-      { received: 10, pendingStart: 5, inspected: 12, pendingEnd: 3 },
-      { received: 20, pendingStart: 0, inspected: 15, pendingEnd: 5 },
-    ]);
-    assert.equal(full.incidents.length, 2);
-    assert.deepEqual(full.byShift.map(({ name, received, pendingStart, inspected }) =>
-      ({ name, received, pendingStart, inspected })), [
-      { name: 'Día', received: 30, pendingStart: 5, inspected: 27 },
-    ]);
+    assert.equal(full.summary.inspected, 60);
+    assert.equal(full.summary.inspectedUnits, 1200);
+    assert.equal(full.summary.approved, 54);
+    assert.equal(full.summary.blocked, 6);
+    assert.equal(full.summary.observed, 11);
+    assert.equal(full.summary.productivity, 6);
+    assert.equal(full.summary.approvalRate, 90);
+    assert.deepEqual(full.classifications.map(c => c.units), [3, 3, 3, 2]);
+    const filtered = await dashboard(request, viewer, `${query}&operator=Ana`);
+    assert.equal(filtered.summary.inspected, 40);
+    assert.equal(filtered.summary.productivity, 5);
+    assert.equal(filtered.records.length, 2);
+    assert.equal(filtered.classifications[2].units, 2);
+    const day = await dashboard(request, viewer, 'from=2026-11-18&to=2026-11-18&operator=Ana');
+    assert.equal(day.summary.inspected, 10);
+    assert.equal(day.summary.observed, 4);
+    const noData = await dashboard(request, viewer, `${query}&operator=Nadie`);
+    assert.equal(noData.records.length, 0);
+    assert.equal(noData.summary.inspected, 0);
+    for (const invalid of ['from=2026-02-30', 'from=2026-11-30&to=2026-11-01']) {
+      assert.equal((await request(`/dashboard?${invalid}`, { headers: { Cookie: admin } })).status, 400);
+    }
+    // Una fila nueva antes del duplicado tampoco debe persistirse.
+    const fresh = { ...exampleRecords()[0], date: '2026-11-20' };
+    assert.equal((await upload(request, admin, await workbook([fresh, exampleRecords()[0]]))).status, 409);
+    assert.equal((await repo.listQualityRecords('2026-11-01', '2026-11-30')).length, 3);
+  });
+});
 
-    const filtered = await dashboard(request, viewer, `${query}&shift=D%C3%ADa&product=Vajillas`);
-    assert.equal(filtered.summary.received, 20);
-    assert.equal(filtered.summary.available, 20);
-    assert.equal(filtered.summary.approvalRate, 12 / 20 * 100);
-    assert.equal(filtered.summary.pendingEnd, 3);
-    assert.deepEqual(filtered.daily.map(({ pendingStart, received, inspected, approved, rejected }) =>
-      ({ pendingStart, received, inspected, approved, rejected })), [
-      { pendingStart: 0, received: 20, inspected: 15, approved: 12, rejected: 3 },
-    ]);
-    assert.equal(filtered.incidents.length, 1);
-
-    const oneDay = await dashboard(request, viewer, 'from=2026-11-03&to=2026-11-03');
-    assert.equal(oneDay.summary.openingPending, 5);
-    assert.equal(oneDay.summary.received, 10);
-    assert.equal(oneDay.summary.available, 15);
-    assert.equal(oneDay.summary.inspected, 12);
-    assert.equal(oneDay.summary.approved, 10);
-    assert.equal(oneDay.summary.rejected, 2);
-    assert.equal(oneDay.summary.pendingToInspect, 3);
-    assert.equal(oneDay.summary.approvalRate, 10 / 15 * 100);
-
-    assert.equal((await upload(request, admin, xlsx)).status, 409);
-    assert.equal((await repo.listQualityRecords('2026-11-01', '2026-11-30')).length, 2);
+test('Excel inválido no guarda jornadas parciales y devuelve un error de fila', async () => {
+  await withServer(async ({ repo, request, login }) => {
+    const admin = await login('admin@test.local');
+    const rows = exampleRecords();
+    rows[2].tolerated = 100;
+    const response = await upload(request, admin, await workbook(rows));
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).error, /Fila 4/);
+    assert.equal((await repo.listQualityRecords('2026-11-01', '2026-11-30')).length, 0);
   });
 });
 
