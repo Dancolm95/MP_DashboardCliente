@@ -1,108 +1,45 @@
-export const CLASSIFICATIONS = ['TOLERADO', 'MENOR', 'MAYOR', 'CRITICO'];
-const CLASSIFICATION_SET = new Set(CLASSIFICATIONS);
-const MOMENTS = ['inicial', 'cierre'];
+export const CLASSIFICATIONS = [
+  { key: 'tolerated', label: 'Tolerado' },
+  { key: 'minor', label: 'Menor' },
+  { key: 'major', label: 'Mayor' },
+  { key: 'critical', label: 'Crítico' },
+];
+export const UNITS_PER_BOX = 20;
+export const validDate = value => typeof value === 'string'
+  && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && !Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+  && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+export const workDayKey = row => JSON.stringify([row.date, row.operatorId]);
+const fail = message => { throw Object.assign(new Error(message), { status: 400 }); };
 
-function validDate(value) {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
-}
-
-function requiredText(value, label, limit) {
-  if (typeof value !== 'string' || !value.trim() || value !== value.trim() || value.length > limit) {
-    throw new Error(`${label}: valor inválido.`);
+export function validateBoxControlBatch(records) {
+  if (!Array.isArray(records) || !records.length || records.length > 3000) {
+    fail('Indica entre 1 y 3000 jornadas de operario.');
   }
-}
-
-function compositionCounts(composition, code, moment) {
-  if (!composition || !Number.isInteger(composition.optimal) || composition.optimal < 0 || composition.optimal > 20
-    || !Array.isArray(composition.details)) {
-    throw new Error(`${code}: composición ${moment} inválida.`);
-  }
-  const counts = Object.fromEntries(CLASSIFICATIONS.map(id => [id, 0]));
-  for (const detail of composition.details) {
-    if (!CLASSIFICATION_SET.has(detail?.classificationId)
-      || !Number.isInteger(detail.quantity) || detail.quantity < 1 || detail.quantity > 20
-      || counts[detail.classificationId] !== 0) {
-      throw new Error(`${code}: detalle ${moment} inválido o repetido.`);
+  const keys = new Set();
+  for (const [index, row] of records.entries()) {
+    const at = `Fila ${row?.row || index + 2}`;
+    if (!row || !validDate(row.date)) fail(`${at}: fecha inválida.`);
+    if (typeof row.operatorId !== 'string' || !row.operatorId.trim()
+      || row.operatorId !== row.operatorId.trim() || row.operatorId.length > 100) {
+      fail(`${at}: indica un operario de hasta 100 caracteres.`);
     }
-    counts[detail.classificationId] = detail.quantity;
-  }
-  if (composition.optimal + Object.values(counts).reduce((sum, count) => sum + count, 0) !== 20) {
-    throw new Error(`${code}: la composición ${moment} debe sumar 20 vajillas.`);
-  }
-  return { OPTIMO: composition.optimal, ...counts };
-}
-
-export function validateBoxControlBatch({ workDays, boxes }) {
-  if (!Array.isArray(workDays) || !Array.isArray(boxes) || boxes.length === 0) {
-    throw new Error('Indica jornadas y al menos una caja.');
-  }
-  const days = new Set();
-  for (const day of workDays) {
-    requiredText(day?.operatorId, 'Operario', 50);
-    if (!validDate(day.date) || !Number.isFinite(day.hours) || day.hours <= 0 || day.hours > 24) {
-      throw new Error('Fecha u horas trabajadas inválidas.');
+    if (!Number.isFinite(row.hours) || row.hours <= 0 || row.hours > 24) {
+      fail(`${at}: las horas trabajadas deben ser mayores que 0 y como máximo 24.`);
     }
-    const key = `${day.operatorId}|${day.date}`;
-    if (days.has(key)) throw new Error('Jornada de operario repetida.');
-    days.add(key);
-  }
-  const codes = new Set();
-  const totals = new Map();
-  for (const box of boxes) {
-    requiredText(box?.code, 'Código de caja', 100);
-    requiredText(box.operatorId, 'Operario', 50);
-    if (!validDate(box.date) || !days.has(`${box.operatorId}|${box.date}`)) {
-      throw new Error(`${box.code}: falta la jornada del operario en esa fecha.`);
-    }
-    if (codes.has(box.code)) throw new Error(`${box.code}: código de caja repetido.`);
-    codes.add(box.code);
-    if (!totals.has(box.date)) totals.set(box.date, {
-      inicial: Object.fromEntries(['OPTIMO', ...CLASSIFICATIONS].map(id => [id, 0])),
-      cierre: Object.fromEntries(['OPTIMO', ...CLASSIFICATIONS].map(id => [id, 0])),
-    });
-    for (const moment of MOMENTS) {
-      const counts = compositionCounts(box[moment], box.code, moment);
-      for (const [id, count] of Object.entries(counts)) totals.get(box.date)[moment][id] += count;
-    }
-  }
-  for (const [date, moments] of totals) {
-    for (const id of ['OPTIMO', ...CLASSIFICATIONS]) {
-      if (moments.inicial[id] !== moments.cierre[id]) {
-        throw new Error(`${date}: el total de ${id} cambió entre inspección y cierre.`);
+    for (const field of ['approved', 'blocked', ...CLASSIFICATIONS.map(c => c.key)]) {
+      if (!Number.isSafeInteger(row[field]) || row[field] < 0) {
+        fail(`${at}: ${field} debe ser un entero no negativo.`);
       }
     }
-  }
-}
-
-export function summarizeBoxControl(workDays, boxes) {
-  const operators = new Map(workDays.map(day => [
-    `${day.operatorId}|${day.date}`,
-    { operatorId: day.operatorId, date: day.date, hoursWorked: day.hours, boxesReviewed: 0 },
-  ]));
-  const summary = { boxes: boxes.length, initialApproved: 0, initialBlocked: 0,
-    finalApproved: 0, finalBlocked: 0 };
-  for (const box of boxes) {
-    operators.get(`${box.operatorId}|${box.date}`).boxesReviewed += 1;
-    for (const [moment, prefix] of [['inicial', 'initial'], ['cierre', 'final']]) {
-      const approved = box[moment].optimal === 20;
-      summary[`${prefix}${approved ? 'Approved' : 'Blocked'}`] += 1;
+    const inspected = row.approved + row.blocked;
+    if (!Number.isSafeInteger(inspected * UNITS_PER_BOX)) fail(`${at}: cantidad de cajas demasiado grande.`);
+    const observed = CLASSIFICATIONS.reduce((total, c) => total + row[c.key], 0);
+    if (observed < row.blocked || observed > row.blocked * UNITS_PER_BOX) {
+      fail(`${at}: las unidades observadas deben estar entre una y 20 por caja bloqueada (entre ${row.blocked} y ${row.blocked * UNITS_PER_BOX} en total).`);
     }
+    const key = workDayKey(row);
+    if (keys.has(key)) fail(`${at}: jornada repetida para ${row.operatorId} en ${row.date}.`);
+    keys.add(key);
   }
-  const byOperator = new Map();
-  for (const day of operators.values()) {
-    if (!byOperator.has(day.operatorId)) byOperator.set(day.operatorId, {
-      operatorId: day.operatorId, hoursWorked: 0, boxesReviewed: 0,
-    });
-    const total = byOperator.get(day.operatorId);
-    total.hoursWorked += day.hoursWorked;
-    total.boxesReviewed += day.boxesReviewed;
-  }
-  return {
-    summary,
-    operators: [...byOperator.values()].map(row => ({
-      ...row, boxesPerHour: row.boxesReviewed / row.hoursWorked,
-    })).sort((a, b) => a.operatorId.localeCompare(b.operatorId)),
-  };
 }
