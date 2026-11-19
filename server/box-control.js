@@ -27,12 +27,13 @@ export function validateBoxControlBatch(records) {
     if (!Number.isFinite(row.hours) || row.hours <= 0 || row.hours > 24) {
       fail(`${at}: las horas trabajadas deben ser mayores que 0 y como máximo 24.`);
     }
-    for (const field of ['approved', 'blocked', ...CLASSIFICATIONS.map(c => c.key)]) {
+    for (const { key: field, label } of [{ key: 'approved', label: 'Cajas aprobadas' }, { key: 'blocked', label: 'Cajas bloqueadas' }, ...CLASSIFICATIONS]) {
       if (!Number.isSafeInteger(row[field]) || row[field] < 0) {
-        fail(`${at}: ${field} debe ser un entero no negativo.`);
+        fail(`${at}: ${label} debe ser un entero no negativo.`);
       }
     }
     const inspected = row.approved + row.blocked;
+    if (!Number.isFinite(inspected / row.hours)) fail(`${at}: las horas trabajadas son demasiado pequeñas.`);
     if (!Number.isSafeInteger(inspected * UNITS_PER_BOX)) fail(`${at}: cantidad de cajas demasiado grande.`);
     const observed = CLASSIFICATIONS.reduce((total, c) => total + row[c.key], 0);
     if (observed < row.blocked || observed > row.blocked * UNITS_PER_BOX) {
