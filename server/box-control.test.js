@@ -19,7 +19,7 @@ test('consolidado: totales, productividad ponderada, clasificaciones y filtros c
   assert.deepEqual(result.summary, {
     approved: 54, blocked: 6, inspected: 60, hours: 10, observed: 11,
     inspectedUnits: 1200, productivity: 6, approvalRate: 90, blockedRate: 10,
-    workDays: 3, operatorCount: 2,
+    workDays: 3, operatorCount: 2, daysWithRecords: 2,
   });
   assert.deepEqual(result.operators.map(r => [r.operatorId, r.inspected, r.hours, r.productivity]), [
     ['Luis', 20, 2, 10], ['Ana', 40, 8, 5],
@@ -32,9 +32,12 @@ test('consolidado: totales, productividad ponderada, clasificaciones y filtros c
   assert.equal(ana.summary.inspected, 40);
   assert.equal(ana.summary.productivity, 5);
   assert.equal(ana.summary.observed, 10);
+  assert.equal(ana.summary.daysWithRecords, 2);
   assert.equal(ana.daily[0].inspected, 10);
   assert.deepEqual(ana.options.operators, ['Ana', 'Luis']);
   assert.equal(buildDashboard(records, { operator: 'Nadie' }).summary.productivity, 0);
+  assert.equal(buildDashboard(records.filter(row => row.date === '2026-11-18')).summary.daysWithRecords, 1);
+  assert.equal(buildDashboard(records, { operator: 'Nadie' }).summary.daysWithRecords, 0);
   assert.equal(buildDashboard([]).summary.approvalRate, 0);
   assert.deepEqual(buildDashboard([]).classifications.map(r => r.units), [0, 0, 0, 0]);
 });

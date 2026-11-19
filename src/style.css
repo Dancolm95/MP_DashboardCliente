@@ -1557,7 +1557,7 @@ tr:last-child td {
 
 .quality-secondary {
   display: grid;
-  grid-template-columns: repeat(3,minmax(0,1fr));
+  grid-template-columns: repeat(4,minmax(0,1fr));
   background: #fff;
   border: 1px solid #e4eaf2;
   border-radius: 14px;
@@ -1814,12 +1814,20 @@ tr:last-child td {
   .quality-main-grid .donut-wrap {
     height: 185px;
   }
+  .quality-secondary {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    row-gap: 15px;
+  }
+  .quality-secondary>div:nth-child(2) {
+    border-right: 0;
+  }
 }
 
 @media (max-width:760px) {
   .quality-secondary {
     grid-template-columns: 1fr;
     padding: 4px 14px;
+    row-gap: 0;
   }
   .quality-secondary>div {
     border-right: 0;

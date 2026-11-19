@@ -27,10 +27,11 @@ function grouped(rows, field) {
 }
 export function buildDashboard(allRecords, { operator = '' } = {}) {
   const records = allRecords.filter(row => !operator || row.operatorId === operator);
-  const summary = totals(records);
+  const daily = grouped(records, 'date').sort((a, b) => a.date.localeCompare(b.date));
+  const summary = { ...totals(records), daysWithRecords: daily.length };
   return {
     summary,
-    daily: grouped(records, 'date').sort((a, b) => a.date.localeCompare(b.date)),
+    daily,
     operators: grouped(records, 'operatorId').sort((a, b) =>
       b.productivity - a.productivity || a.operatorId.localeCompare(b.operatorId)),
     classifications: CLASSIFICATIONS.map(c => {
