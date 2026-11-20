@@ -78,12 +78,12 @@ export function createApp(repo) {
     loginAttempts.delete(ip);
     res.cookie('mp_session', token, {
       httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production',
-      path: '/', maxAge: 7 * DAY,
+      path: '/',
     });
     res.json({ user: publicUser(user) });
   }));
-  app.post('/api/auth/logout', requireAuth, asyncRoute(async (req, res) => {
-    await repo.deleteSession(tokenHash(req.sessionToken));
+  app.post('/api/auth/logout', asyncRoute(async (req, res) => {
+    if (req.sessionToken) await repo.deleteSession(tokenHash(req.sessionToken));
     res.clearCookie('mp_session', { path: '/' });
     res.json({ ok: true });
   }));

@@ -73,8 +73,7 @@ function App() {
     setNotice(null);
   };
   useEffect(() => {
-    api('/auth/me')
-      .then(data => setUser(data.user))
+    api('/auth/logout', { method: 'POST' })
       .catch(() => {})
       .finally(() => setBooting(false));
   }, []);

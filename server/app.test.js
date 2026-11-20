@@ -105,6 +105,28 @@ test('login, permisos y cierre de sesión', async () => {
   });
 });
 
+test('la sesión no persiste y abrir la aplicación revoca el acceso anterior', async () => {
+  await withServer(async ({ request, login, password }) => {
+    const response = await request('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@test.local', password }),
+    });
+    assert.equal(response.status, 200);
+    const setCookie = response.headers.get('set-cookie');
+    assert.doesNotMatch(setCookie, /(?:max-age|expires)=/i);
+    const cookie = setCookie.split(';')[0];
+    assert.equal((await request('/auth/me', { headers: { Cookie: cookie } })).status, 200);
+    assert.equal((await request('/auth/logout', {
+      method: 'POST', headers: { Cookie: cookie },
+    })).status, 200);
+    assert.equal((await request('/auth/me', { headers: { Cookie: cookie } })).status, 401);
+    assert.equal((await request('/auth/logout', { method: 'POST' })).status, 200);
+    const freshCookie = await login('admin@test.local');
+    assert.equal((await request('/auth/me', { headers: { Cookie: freshCookie } })).status, 200);
+  });
+});
+
 test('Excel V2 llega a indicadores; sesión, permisos, filtros y duplicados', async () => {
   await withServer(async ({ repo, request, login }) => {
     const admin = await login('admin@test.local');
