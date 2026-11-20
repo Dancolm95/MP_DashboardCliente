@@ -20,7 +20,7 @@ npm run dev
 
 Abre `http://127.0.0.1:5173`. `seed` crea el administrador si no existe; no cambia su contraseña ni añade datos ficticios al dashboard. El administrador importa Excel y administra cuentas de visualización. Un visualizador consulta las cuatro vistas y sus filtros. Eliminar su cuenta invalida sus sesiones; la cuenta administradora no se puede eliminar. No se añaden roles nuevos.
 
-El login admite cinco intentos por IP en 15 minutos; el contador se guarda en memoria. Cada apertura o recarga de la aplicación revoca la sesión anterior y muestra el acceso. La cookie no tiene persistencia entre sesiones del navegador. La API verifica sesión y rol antes de aceptar una importación.
+El login admite cinco intentos por IP en 15 minutos; el contador se guarda en memoria. Actualizar la pestaña conserva el acceso; al abrir la aplicación en una pestaña nueva se solicita iniciar sesión y se revoca la sesión anterior. La cookie no tiene persistencia entre sesiones del navegador. Algunos navegadores restauran el almacenamiento de una pestaña al usar «Reabrir pestaña cerrada»; en ese caso también pueden restaurar el acceso. La API verifica sesión y rol antes de aceptar una importación.
 
 ## Reglas del consolidado
 

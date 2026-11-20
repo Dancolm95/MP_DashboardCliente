@@ -105,7 +105,7 @@ test('login, permisos y cierre de sesión', async () => {
   });
 });
 
-test('la sesión no persiste y abrir la aplicación revoca el acceso anterior', async () => {
+test('la cookie no persiste y el cierre de sesión revoca el acceso anterior', async () => {
   await withServer(async ({ request, login, password }) => {
     const response = await request('/auth/login', {
       method: 'POST',

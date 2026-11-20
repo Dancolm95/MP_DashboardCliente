@@ -21,6 +21,7 @@ import {
 import './style.css';
 import { QualityContent } from './quality-dashboard.jsx';
 
+const TAB_SESSION = 'mp_tab_session';
 const localDate = d =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const today = () => localDate(new Date());
@@ -60,6 +61,7 @@ function App() {
   const sessionVersion = useRef(0);
   const requestVersion = useRef(0);
   const clearAccess = () => {
+    sessionStorage.removeItem(TAB_SESSION);
     sessionVersion.current += 1;
     requestVersion.current += 1;
     setUser(null);
@@ -73,9 +75,16 @@ function App() {
     setNotice(null);
   };
   useEffect(() => {
-    api('/auth/logout', { method: 'POST' })
-      .catch(() => {})
-      .finally(() => setBooting(false));
+    if (sessionStorage.getItem(TAB_SESSION)) {
+      api('/auth/me')
+        .then(data => setUser(data.user))
+        .catch(() => sessionStorage.removeItem(TAB_SESSION))
+        .finally(() => setBooting(false));
+    } else {
+      api('/auth/logout', { method: 'POST' })
+        .catch(() => {})
+        .finally(() => setBooting(false));
+    }
   }, []);
   const reload = () => {
     const version = sessionVersion.current;
@@ -263,6 +272,7 @@ function Login({ onLogin }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
+      sessionStorage.setItem(TAB_SESSION, '1');
       onLogin(data.user);
     } catch (err) {
       setError(err.message);
