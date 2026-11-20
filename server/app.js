@@ -9,6 +9,8 @@ import { buildDashboard } from './quality.js';
 import { validDate } from './box-control.js';
 
 const DAY = 24 * 60 * 60 * 1000;
+const SESSION_MAX_AGE = 12 * 60 * 60 * 1000;
+const SESSION_IDLE_TIMEOUT = 60 * 60 * 1000;
 const LOGIN_WINDOW = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
 const bad = (message, status = 400) => {
@@ -16,24 +18,29 @@ const bad = (message, status = 400) => {
   error.status = status;
   throw error;
 };
-const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
+const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const emailOk = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 
-export function createApp(repo) {
+export function createApp(repo, { now = () => Date.now() } = {}) {
   const app = express();
   const loginAttempts = new Map();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '100kb' }));
 
-  app.use('/api', async (req, _res, next) => {
+  app.use('/api', async (req, res, next) => {
     try {
       const match = req.headers.cookie?.match(/(?:^|;\s*)mp_session=([a-f0-9]{64})(?:;|$)/);
       if (match) {
         const session = await repo.getSession(tokenHash(match[1]));
-        if (session && session.expiresAt > new Date().toISOString()) {
+        const time = now();
+        if (session && Date.parse(session.expiresAt) > time
+          && Date.parse(session.lastActivityAt) + SESSION_IDLE_TIMEOUT > time) {
           req.user = await repo.getUserById(session.userId);
           req.sessionToken = match[1];
+        } else {
+          if (session) await repo.deleteSession(tokenHash(match[1]));
+          res.clearCookie('mp_session', { path: '/' });
         }
       }
       next();
@@ -41,10 +48,11 @@ export function createApp(repo) {
       next(error);
     }
   });
-  const requireAuth = (req, _res, next) => {
+  const requireAuth = asyncRoute(async (req, _res, next) => {
     if (!req.user) return next(Object.assign(new Error('Inicia sesión para continuar.'), { status: 401 }));
+    await repo.touchSession(tokenHash(req.sessionToken), new Date(now()).toISOString());
     next();
-  };
+  });
   const requireAdmin = (req, _res, next) => {
     if (req.user?.role !== 'admin') {
       return next(Object.assign(new Error('No tienes permiso para esta acción.'), { status: 403 }));
@@ -55,18 +63,18 @@ export function createApp(repo) {
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
   app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: publicUser(req.user) }));
   app.post('/api/auth/login', asyncRoute(async (req, res) => {
-    const now = Date.now();
+    const time = now();
     for (const [ip, attempt] of loginAttempts) {
-      if (attempt.expiresAt <= now) loginAttempts.delete(ip);
+      if (attempt.expiresAt <= time) loginAttempts.delete(ip);
     }
     const ip = req.ip;
     const attempt = loginAttempts.get(ip);
     if (attempt?.count >= MAX_LOGIN_ATTEMPTS) {
-      res.set('Retry-After', String(Math.ceil((attempt.expiresAt - now) / 1000)));
+      res.set('Retry-After', String(Math.ceil((attempt.expiresAt - time) / 1000)));
       bad('Demasiados intentos de acceso. Intenta más tarde.', 429);
     }
     if (attempt) attempt.count += 1;
-    else loginAttempts.set(ip, { count: 1, expiresAt: now + LOGIN_WINDOW });
+    else loginAttempts.set(ip, { count: 1, expiresAt: time + LOGIN_WINDOW });
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
     const user = await repo.getUserByEmail(email);
@@ -74,7 +82,9 @@ export function createApp(repo) {
       bad('Correo o contraseña incorrectos.', 401);
     }
     const token = newSessionToken();
-    await repo.createSession(tokenHash(token), user.id, new Date(Date.now() + 7 * DAY).toISOString());
+    const startedAt = now();
+    await repo.createSession(tokenHash(token), user.id,
+      new Date(startedAt + SESSION_MAX_AGE).toISOString(), new Date(startedAt).toISOString());
     loginAttempts.delete(ip);
     res.cookie('mp_session', token, {
       httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production',

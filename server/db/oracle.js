@@ -50,13 +50,16 @@ export async function createOracleRepository(config) {
       const result = await execute("DELETE FROM users WHERE id = :id AND role = 'viewer'", { id });
       return result.rowsAffected > 0;
     },
-    async createSession(tokenHash, userId, expiresAt) {
-      await execute(`INSERT INTO sessions (token_hash,user_id,expires_at)
-        VALUES (:tokenHash,:userId,:expiresAt)`, { tokenHash, userId, expiresAt });
+    async createSession(tokenHash, userId, expiresAt, lastActivityAt) {
+      await execute(`INSERT INTO sessions (token_hash,user_id,expires_at,last_activity_at)
+        VALUES (:tokenHash,:userId,:expiresAt,:lastActivityAt)`, { tokenHash, userId, expiresAt, lastActivityAt });
     },
     async getSession(tokenHash) {
-      return (await query(`SELECT user_id AS "userId", expires_at AS "expiresAt"
+      return (await query(`SELECT user_id AS "userId", expires_at AS "expiresAt", last_activity_at AS "lastActivityAt"
         FROM sessions WHERE token_hash = :tokenHash`, { tokenHash }))[0] || null;
+    },
+    async touchSession(tokenHash, lastActivityAt) {
+      await execute('UPDATE sessions SET last_activity_at = GREATEST(last_activity_at, :lastActivityAt) WHERE token_hash = :tokenHash', { tokenHash, lastActivityAt });
     },
     async deleteSession(tokenHash) {
       await execute('DELETE FROM sessions WHERE token_hash = :tokenHash', { tokenHash });

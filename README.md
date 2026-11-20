@@ -22,6 +22,8 @@ Abre `http://127.0.0.1:5173`. `seed` crea el administrador si no existe; no camb
 
 El login admite cinco intentos por IP en 15 minutos; el contador se guarda en memoria. Actualizar la pestaña conserva el acceso; al abrir la aplicación en una pestaña nueva se solicita iniciar sesión y se revoca la sesión anterior. La cookie no tiene persistencia entre sesiones del navegador. Algunos navegadores restauran el almacenamiento de una pestaña al usar «Reabrir pestaña cerrada»; en ese caso también pueden restaurar el acceso. La API verifica sesión y rol antes de aceptar una importación.
 
+La sesión vence como máximo **12 horas después del login** o tras **1 hora sin peticiones autenticadas**, lo que ocurra primero. Consultar datos o recargar una pestaña activa reinicia únicamente el plazo de inactividad; no prolonga las 12 horas. Dejar la pestaña abierta no cuenta como actividad. El servidor rechaza la siguiente petición de una sesión vencida y la interfaz vuelve al login. SQLite guarda la última actividad para mantener ambos límites aunque el servidor se reinicie. Las sesiones anteriores sin este dato requieren iniciar sesión nuevamente.
+
 ## Reglas del consolidado
 
 - Jornada = fecha + identificador de operario. Usa siempre el mismo identificador; se distinguen mayúsculas/minúsculas. No hay desglose por caja, lote, producto ni turno.
@@ -69,7 +71,7 @@ Las cuatro vistas comparten los filtros de fechas y operario, así como los esta
 
 `quality_workdays` guarda fecha/operario como clave única, horas, cajas aprobadas/bloqueadas, las cuatro cantidades y procedencia de la carga. SQLite aplica tipos estrictos, claves foráneas y restricciones de cantidades, fechas, horas y capacidad, además de la validación en el servicio.
 
-El adaptador y el esquema Oracle preexistentes se conservan como referencia V1 y no se migran en esta entrega. Las rutas de calidad devuelven 503 con un mensaje explícito si se selecciona Oracle. Adaptar y validar Oracle contra una instancia real queda pendiente y fuera de este alcance SQLite.
+El adaptador y el esquema Oracle preexistentes se conservan como referencia V1 y no se migran en esta entrega. Las rutas de calidad devuelven 503 con un mensaje explícito si se selecciona Oracle. Para bases Oracle existentes, el DBA debe añadir `last_activity_at VARCHAR2(30)` a `sessions` antes de usar la nueva política. Adaptar y validar Oracle contra una instancia real queda pendiente y fuera de este alcance SQLite.
 
 ## Verificación
 

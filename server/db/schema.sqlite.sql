@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  expires_at TEXT NOT NULL
+  expires_at TEXT NOT NULL,
+  last_activity_at TEXT
 );
 -- Calidad V2: una fila por operario y fecha, sin identificadores de caja.
 CREATE TABLE IF NOT EXISTS quality_workdays (

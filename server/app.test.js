@@ -4,9 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { exampleRecords, workbook } from './test-fixtures.js';
 import { createSqliteRepository } from './db/sqlite.js';
 import { createApp } from './app.js';
-import { hashPassword } from './security.js';
+import { hashPassword, tokenHash } from './security.js';
 
-async function withServer(run) {
+async function withServer(run, options) {
   const repo = createSqliteRepository(':memory:');
   const password = 'ExamplePass123!';
   await repo.createUser({
@@ -19,7 +19,7 @@ async function withServer(run) {
     passwordHash: await hashPassword(password), role: 'viewer',
     createdAt: new Date().toISOString(),
   });
-  const server = createApp(repo).listen(0, '127.0.0.1');
+  const server = createApp(repo, options).listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   const request = (path, options = {}) => fetch(`${base}/api${path}`, options);
@@ -201,5 +201,49 @@ test('límite de intentos de login', async t => {
     const currentTime = Date.now();
     t.mock.method(Date, 'now', () => currentTime + 15 * 60 * 1000 + 1);
     assert.equal((await tryLogin(password)).status, 200);
+  });
+});
+
+
+test('vence tras una hora inactiva; la actividad renueva solo ese plazo', async () => {
+  let time = Date.parse('2026-11-20T08:00:00Z');
+  const hour = 60 * 60 * 1000;
+  await withServer(async ({ repo, login, request }) => {
+    const cookie = await login('admin@test.local');
+    const hash = tokenHash(cookie.split('=')[1]);
+    const original = await repo.getSession(hash);
+    assert.equal(Date.parse(original.expiresAt), time + 12 * hour);
+    time += hour - 1;
+    assert.equal((await request('/auth/me', { headers: { Cookie: cookie } })).status, 200);
+    assert.equal((await repo.getSession(hash)).expiresAt, original.expiresAt);
+    time += hour;
+    assert.equal((await request('/dashboard', { headers: { Cookie: cookie } })).status, 401);
+    assert.equal(await repo.getSession(hash), null);
+  }, { now: () => time });
+});
+
+test('vence a las 12 horas incluso con actividad continua', async () => {
+  let time = Date.parse('2026-11-20T08:00:00Z');
+  const halfHour = 30 * 60 * 1000;
+  await withServer(async ({ login, request }) => {
+    const cookie = await login('admin@test.local');
+    for (let step = 1; step < 24; step++) {
+      time += halfHour;
+      assert.equal((await request('/auth/me', { headers: { Cookie: cookie } })).status, 200);
+    }
+    time += halfHour;
+    assert.equal((await request('/auth/me', { headers: { Cookie: cookie } })).status, 401);
+    const fresh = await login('admin@test.local');
+    assert.equal((await request('/auth/me', { headers: { Cookie: fresh } })).status, 200);
+  }, { now: () => time });
+});
+
+test('rechaza sesiones antiguas sin última actividad registrada', async () => {
+  await withServer(async ({ repo, request }) => {
+    const token = 'a'.repeat(64);
+    const user = await repo.getUserByEmail('admin@test.local');
+    await repo.createSession(tokenHash(token), user.id, '2099-01-01T00:00:00.000Z', null);
+    assert.equal((await request('/auth/me', { headers: { Cookie: `mp_session=${token}` } })).status, 401);
+    assert.equal(await repo.getSession(tokenHash(token)), null);
   });
 });

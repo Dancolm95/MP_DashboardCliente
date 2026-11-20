@@ -42,6 +42,7 @@ async function api(path, options = {}) {
       body?.error || 'No se pudo completar la operación.'
     );
     error.status = response.status;
+    if (response.status === 401) window.dispatchEvent(new Event('mp-session-expired'));
     throw error;
   }
   return body;
@@ -74,6 +75,10 @@ function App() {
     setLoading(false);
     setNotice(null);
   };
+  useEffect(() => {
+    window.addEventListener('mp-session-expired', clearAccess);
+    return () => window.removeEventListener('mp-session-expired', clearAccess);
+  }, []);
   useEffect(() => {
     if (sessionStorage.getItem(TAB_SESSION)) {
       api('/auth/me')
