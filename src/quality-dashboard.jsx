@@ -15,7 +15,6 @@ import {
   ClipboardCheck,
   CircleCheck,
   Clock3,
-  AlertTriangle,
   CalendarDays,
   FileSpreadsheet,
   ArrowRight,
@@ -603,13 +602,6 @@ export function QualityContent({
           )}
         </div>
       )}
-      <div className="quality-note">
-        <AlertTriangle size={16} />
-        <span>
-          Cada caja contiene 20 unidades. Una caja con unidades Tolerado, Menor,
-          Mayor o Crítico queda bloqueada.
-        </span>
-      </div>
     </>
   );
 }
