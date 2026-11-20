@@ -25,6 +25,10 @@ export function createSqliteRepository(path) {
       DROP TABLE IF EXISTS quality_records;
     `);
     db.exec(readFileSync(new URL('./schema.sqlite.sql', import.meta.url), 'utf8'));
+    // Las sesiones anteriores no tienen actividad registrada y exigirán un nuevo login.
+    if (!db.prepare('PRAGMA table_info(sessions)').all().some(column => column.name === 'last_activity_at')) {
+      db.exec('ALTER TABLE sessions ADD COLUMN last_activity_at TEXT');
+    }
     db.exec('PRAGMA user_version = 2; COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
@@ -54,13 +58,17 @@ export function createSqliteRepository(path) {
     async deleteViewer(id) {
       return db.prepare("DELETE FROM users WHERE id = ? AND role = 'viewer'").run(id).changes > 0;
     },
-    async createSession(tokenHash, userId, expiresAt) {
-      db.prepare(`INSERT INTO sessions (token_hash,user_id,expires_at)
-        VALUES (?,?,?)`).run(tokenHash, userId, expiresAt);
+    async createSession(tokenHash, userId, expiresAt, lastActivityAt) {
+      db.prepare(`INSERT INTO sessions (token_hash,user_id,expires_at,last_activity_at)
+        VALUES (?,?,?,?)`).run(tokenHash, userId, expiresAt, lastActivityAt);
     },
     async getSession(tokenHash) {
-      return db.prepare(`SELECT user_id AS userId, expires_at AS expiresAt
+      return db.prepare(`SELECT user_id AS userId, expires_at AS expiresAt, last_activity_at AS lastActivityAt
         FROM sessions WHERE token_hash = ?`).get(tokenHash) || null;
+    },
+    async touchSession(tokenHash, lastActivityAt) {
+      db.prepare('UPDATE sessions SET last_activity_at = MAX(last_activity_at, ?) WHERE token_hash = ?')
+        .run(lastActivityAt, tokenHash);
     },
     async deleteSession(tokenHash) {
       db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);

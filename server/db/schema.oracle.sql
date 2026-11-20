@@ -11,7 +11,8 @@ CREATE TABLE users (
 CREATE TABLE sessions (
   token_hash VARCHAR2(64) PRIMARY KEY,
   user_id VARCHAR2(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  expires_at VARCHAR2(30) NOT NULL
+  expires_at VARCHAR2(30) NOT NULL,
+  last_activity_at VARCHAR2(30)
 );
 CREATE TABLE quality_records (
   id VARCHAR2(36) PRIMARY KEY,
