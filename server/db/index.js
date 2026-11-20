@@ -1,5 +1,5 @@
 export class DuplicateRecordError extends Error {
-  constructor() { super('El archivo contiene un registro de fecha, turno y lote que ya fue cargado. No se importó ninguna fila.'); this.name = 'DuplicateRecordError'; }
+  constructor(message = 'El archivo contiene un registro de fecha, turno y lote que ya fue cargado. No se importó ninguna fila.') { super(message); this.name = 'DuplicateRecordError'; }
 }
 
 export async function createRepository(config = process.env) {

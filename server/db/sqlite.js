@@ -1,16 +1,39 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { DuplicateRecordError } from './index.js';
+import { validateBoxControlBatch } from '../box-control.js';
 
 export function createSqliteRepository(path) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
-  db.exec(readFileSync(new URL('./schema.sqlite.sql', import.meta.url), 'utf8'));
+  // V1 no contiene la atribución necesaria para convertir sus totales a operarios.
+  // Se recrean solo los datos de calidad del prototipo; usuarios y sesiones se conservan.
+  const version = db.prepare('PRAGMA user_version').get().user_version;
+  if (version > 2) { db.close(); throw new Error('Versión SQLite no compatible.'); }
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    if (version < 2) db.exec(`
+      DROP TABLE IF EXISTS detalle_composicion;
+      DROP TABLE IF EXISTS composicion_caja;
+      DROP TABLE IF EXISTS cajas;
+      DROP TABLE IF EXISTS trabajo_diario_operario;
+      DROP TABLE IF EXISTS operarios;
+      DROP TABLE IF EXISTS clasificaciones;
+      DROP TABLE IF EXISTS quality_incidents;
+      DROP TABLE IF EXISTS quality_records;
+    `);
+    db.exec(readFileSync(new URL('./schema.sqlite.sql', import.meta.url), 'utf8'));
+    db.exec('PRAGMA user_version = 2; COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    db.close();
+    throw error;
+  }
   const userFields = 'id, email, name, password_hash AS passwordHash, role, created_at AS createdAt';
   const repo = {
+    qualityVersion: 2,
     async getUserByEmail(email) {
       return db.prepare(`SELECT ${userFields} FROM users WHERE email = ?`).get(email) || null;
     },
@@ -43,54 +66,29 @@ export function createSqliteRepository(path) {
       db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);
     },
     async listQualityRecords(from, to) {
-      return db.prepare(`SELECT id, report_date AS date, row_order AS rowOrder, shift, lot, product,
-        received, pending_start AS pendingStart, inspected, approved, rejected, waste,
-        pending_end AS pendingEnd, staff, hours_per_person AS hoursPerPerson,
-        observations, source_name AS sourceName, uploaded_at AS uploadedAt FROM quality_records
-        WHERE report_date >= ? AND report_date <= ? ORDER BY report_date, uploaded_at, row_order`).all(from, to);
+      return db.prepare(`SELECT operator_id AS operatorId, report_date AS date,
+        hours, approved, blocked, tolerated, minor, major, critical,
+        source_name AS sourceName, uploaded_at AS uploadedAt FROM quality_workdays
+        WHERE report_date BETWEEN ? AND ? ORDER BY report_date, operator_id`).all(from, to);
     },
-    async listQualityIncidents(from, to) {
-      return db.prepare(`SELECT i.id, i.record_id AS recordId, i.report_date AS date,
-        r.shift, i.lot, i.product, i.defect, i.affected, i.action,
-        i.observation, i.responsible FROM quality_incidents i
-        JOIN quality_records r ON r.id = i.record_id
-        WHERE i.report_date >= ? AND i.report_date <= ? ORDER BY i.report_date, i.lot`).all(from, to);
-    },
-    async insertQualityBatch({ records, incidents, uploadedBy, sourceName }) {
-      const ids = new Map();
+    async insertQualityBatch({ records, uploadedBy, sourceName }) {
+      validateBoxControlBatch(records);
       const uploadedAt = new Date().toISOString();
       db.exec('BEGIN IMMEDIATE');
       try {
-        const insertRecord = db.prepare(`INSERT INTO quality_records
-          (id,record_key,report_date,row_order,shift,lot,product,received,pending_start,
-          inspected,approved,rejected,waste,pending_end,staff,hours_per_person,
-          observations,uploaded_by,uploaded_at,source_name)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
-        for (const record of records) {
-          const id = randomUUID();
-          const key = `${record.date}|${record.shift.toLowerCase()}|${record.lot.toLowerCase()}`;
-          ids.set(key, id);
-          insertRecord.run(
-            id, key, record.date, record.row, record.shift, record.lot, record.product,
-            record.received, record.pendingStart, record.inspected, record.approved,
-            record.rejected, record.waste, record.pendingEnd, record.staff,
-            record.hoursPerPerson, record.observations, uploadedBy, uploadedAt, sourceName,
-          );
-        }
-        const insertIncident = db.prepare(`INSERT INTO quality_incidents
-          (id,record_id,report_date,lot,product,defect,affected,action,observation,responsible)
-          VALUES (?,?,?,?,?,?,?,?,?,?)`);
-        for (const incident of incidents) {
-          insertIncident.run(
-            randomUUID(), ids.get(incident.recordKey), incident.date, incident.lot,
-            incident.product, incident.defect, incident.affected, incident.action,
-            incident.observation, incident.responsible,
-          );
-        }
+        const insert = db.prepare(`INSERT INTO quality_workdays
+          (operator_id, report_date, hours, approved, blocked, tolerated, minor,
+          major, critical, uploaded_by, uploaded_at, source_name)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        for (const row of records) insert.run(row.operatorId, row.date, row.hours,
+          row.approved, row.blocked, row.tolerated, row.minor, row.major, row.critical,
+          uploadedBy, uploadedAt, sourceName);
         db.exec('COMMIT');
       } catch (error) {
         db.exec('ROLLBACK');
-        if (error.message?.includes('quality_records.record_key')) throw new DuplicateRecordError();
+        if (error.message?.includes('UNIQUE constraint failed: quality_workdays.')) {
+          throw new DuplicateRecordError('Ya existe un consolidado para ese operario y fecha. No se importó ninguna fila.');
+        }
         throw error;
       }
     },

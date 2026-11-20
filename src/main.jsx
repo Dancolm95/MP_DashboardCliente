@@ -15,11 +15,13 @@ import {
   ArrowRight,
   Database,
   ShieldCheck,
-  Trash2
+  Trash2,
+  TrendingUp
 } from 'lucide-react';
 import './style.css';
 import { QualityContent } from './quality-dashboard.jsx';
 
+const TAB_SESSION = 'mp_tab_session';
 const localDate = d =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const today = () => localDate(new Date());
@@ -52,49 +54,65 @@ function App() {
   const [dashboard, setDashboard] = useState(null);
   const [from, setFrom] = useState(monthAgo());
   const [to, setTo] = useState(today());
-  const [product, setProduct] = useState('');
+  const [operator, setOperator] = useState('');
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const sessionVersion = useRef(0);
+  const requestVersion = useRef(0);
   const clearAccess = () => {
+    sessionStorage.removeItem(TAB_SESSION);
     sessionVersion.current += 1;
+    requestVersion.current += 1;
     setUser(null);
+    setMobileOpen(false);
     setDashboard(null);
     setPage('overview');
     setFrom(monthAgo());
     setTo(today());
-    setProduct('');
+    setOperator('');
     setLoading(false);
     setNotice(null);
   };
   useEffect(() => {
-    api('/auth/me')
-      .then(data => setUser(data.user))
-      .catch(() => {})
-      .finally(() => setBooting(false));
+    if (sessionStorage.getItem(TAB_SESSION)) {
+      api('/auth/me')
+        .then(data => setUser(data.user))
+        .catch(() => sessionStorage.removeItem(TAB_SESSION))
+        .finally(() => setBooting(false));
+    } else {
+      api('/auth/logout', { method: 'POST' })
+        .catch(() => {})
+        .finally(() => setBooting(false));
+    }
   }, []);
   const reload = () => {
     const version = sessionVersion.current;
+    const request = ++requestVersion.current;
+    const current = () => sessionVersion.current === version && requestVersion.current === request;
     setLoading(true);
+    setDashboard(null);
     api(
-      `/dashboard?from=${from}&to=${to}&product=${encodeURIComponent(product)}`
+      `/dashboard?from=${from}&to=${to}&operator=${encodeURIComponent(operator)}`
     )
       .then(data => {
-        if (sessionVersion.current === version) setDashboard(data);
+        if (current()) {
+          setDashboard(data);
+          setNotice(previous => previous?.type === 'error' ? null : previous);
+        }
       })
       .catch(error => {
-        if (sessionVersion.current !== version) return;
+        if (!current()) return;
         if (error.status === 401) clearAccess();
         else setNotice({ type: 'error', text: error.message });
       })
       .finally(() => {
-        if (sessionVersion.current === version) setLoading(false);
+        if (current()) setLoading(false);
       });
   };
   useEffect(() => {
     if (user) reload();
-  }, [user, from, to, product]);
+  }, [user, from, to, operator]);
   const setTab = next => {
     setPage(next);
     setNotice(null);
@@ -114,8 +132,9 @@ function App() {
   if (!user) return <Login onLogin={setUser} />;
   const nav = [
     { id: 'overview', label: 'Resumen', icon: LayoutDashboard },
+    { id: 'productivity', label: 'Productividad', icon: TrendingUp },
     { id: 'records', label: 'Control diario', icon: Table2 },
-    { id: 'incidents', label: 'Incidencias', icon: AlertCircle },
+    { id: 'classifications', label: 'Clasificaciones', icon: AlertCircle },
     ...(user.role === 'admin'
       ? [
           { id: 'upload', label: 'Cargar Excel', icon: UploadCloud },
@@ -128,13 +147,9 @@ function App() {
       <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
         <div className="brand">
           <div className="brand-mark">
-            <span>M</span>
+            <img src="/Logo%20MP360.svg" alt="MP360" />
           </div>
-          <div>
-            <strong>MP Dashboard</strong>
-            <small>Panel de indicadores</small>
-          </div>
-          <button className="mobile-close" onClick={() => setMobileOpen(false)}>
+          <button aria-label="Cerrar menú" className="mobile-close" onClick={() => setMobileOpen(false)}>
             <X size={20} />
           </button>
         </div>
@@ -180,7 +195,7 @@ function App() {
       <main className="main">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="mobile-menu" onClick={() => setMobileOpen(true)}>
+            <button aria-label="Abrir menú" className="mobile-menu" onClick={() => setMobileOpen(true)}>
               <Menu size={22} />
             </button>
             <strong>{nav.find(n => n.id === page)?.label}</strong>
@@ -208,7 +223,7 @@ function App() {
               </button>
             </div>
           )}
-          {['overview', 'records', 'incidents'].includes(page) && (
+          {['overview', 'productivity', 'records', 'classifications'].includes(page) && (
             <QualityContent
               page={page}
               dashboard={dashboard}
@@ -217,22 +232,20 @@ function App() {
               to={to}
               setFrom={setFrom}
               setTo={setTo}
-              product={product}
-              setProduct={setProduct}
+              operator={operator}
+              setOperator={setOperator}
               onNavigate={setTab}
               isAdmin={user.role === 'admin'}
             />
           )}
           {page === 'upload' && (
             <UploadPage
-              onSuccess={(message, warnings) => {
+              onSuccess={message => {
                 reload();
                 setTab('overview');
                 setNotice({
-                  type: warnings.length ? 'error' : 'success',
-                  text: warnings.length
-                    ? `${message} Advertencias: ${warnings.join(' ')}`
-                    : message
+                  type: 'success',
+                  text: message
                 });
               }}
             />
@@ -259,6 +272,7 @@ function Login({ onLogin }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
+      sessionStorage.setItem(TAB_SESSION, '1');
       onLogin(data.user);
     } catch (err) {
       setError(err.message);
@@ -271,9 +285,8 @@ function Login({ onLogin }) {
       <div className="login-visual">
         <div className="login-logo">
           <div className="brand-mark">
-            <span>M</span>
+            <img src="/Logo%20MP360.svg" alt="MP360" />
           </div>
-          <strong>MP Dashboard</strong>
         </div>
         <div className="visual-content">
           <div className="visual-tag">
@@ -310,7 +323,8 @@ function Login({ onLogin }) {
           </div>
         </div>
         <div className="visual-foot">
-          © {new Date().getFullYear()} MP Dashboard · Control en cada dato
+          © {new Date().getFullYear()}
+          <span>Manpower Logistic · Control en cada dato</span>
         </div>
       </div>
       <div className="login-side">
@@ -369,11 +383,20 @@ function Login({ onLogin }) {
           </div>
         </div>
         <div className="login-mobile-foot">
-          © {new Date().getFullYear()} MP Dashboard
+          © {new Date().getFullYear()}
+          <img src="/Logo%20MP360.svg" alt="MP360" />
         </div>
       </div>
     </div>
   );
+}
+
+function FileFormat() {
+  return <div><strong>Una fila por operario y fecha</strong>
+    <p>Columnas obligatorias: Fecha, Operario, Horas trabajadas, Cajas aprobadas, Cajas bloqueadas, Tolerado, Menor, Mayor y Crítico.</p>
+    <p>Fecha: AAAA-MM-DD o fecha Excel. Las cuatro clasificaciones cuentan unidades; usa 0 cuando no haya observadas. Cada caja tiene 20 unidades.</p>
+    <p>Inspeccionadas = aprobadas + bloqueadas. Una jornada ya cargada rechaza todo el archivo. Máximo 3000 jornadas.</p>
+  </div>;
 }
 
 function UploadPage({ onSuccess }) {
@@ -396,8 +419,7 @@ function UploadPage({ onSuccess }) {
         body: file
       });
       onSuccess(
-        `${data.recordCount} registros y ${data.incidentCount} incidencias cargados.`,
-        data.warnings || []
+        `${data.recordCount} jornadas de operario cargadas correctamente.`
       );
     } catch (err) {
       setError(err.message);
@@ -414,12 +436,15 @@ function UploadPage({ onSuccess }) {
           <p>Importa los registros nuevos al cierre de la jornada.</p>
         </div>
       </div>
+      <div className="quality-formula upload-format">
+        <FileFormat />
+      </div>
       <div className="upload-layout">
         <div className="upload-card">
           <div className="section-head">
             <div>
               <h2>Subir archivo Excel</h2>
-              <p>Se leerán CONTROL_DIARIO, INCIDENCIAS y RESUMEN_KPI.</p>
+              <p>Se leerá la hoja CONTROL_DIARIO con el formato Calidad V2.</p>
             </div>
           </div>
           <div

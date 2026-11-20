@@ -1,566 +1,143 @@
-import React, { useMemo } from 'react';
-import {
-  AreaChart,
-  Area,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
-} from 'recharts';
-import {
-  PackageCheck,
-  ClipboardCheck,
-  CircleCheck,
-  Clock3,
-  AlertTriangle,
-  TrendingUp,
-  CalendarDays,
-  FileSpreadsheet,
-  ArrowRight,
-  Boxes
-} from 'lucide-react';
+import React from 'react';
+import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { ClipboardCheck, CircleCheck, Clock3, AlertTriangle, CalendarDays, FileSpreadsheet, ArrowRight, UsersRound, LockKeyhole, TrendingUp } from 'lucide-react';
 
-const fmt = new Intl.NumberFormat('es-PE', { maximumFractionDigits: 1 });
-const dateLabel = date =>
-  new Date(`${date}T12:00:00`).toLocaleDateString('es-PE', {
-    day: '2-digit',
-    month: 'short'
-  });
-const fullDate = date =>
-  new Date(`${date}T12:00:00`).toLocaleDateString('es-PE', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric'
-  });
+const fmt = new Intl.NumberFormat('es-PE', { maximumFractionDigits: 2 });
+const dateLabel = date => new Date(`${date}T12:00:00`).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+const fullDate = date => new Date(`${date}T12:00:00`).toLocaleDateString('es-PE');
+const classificationColors = ['#3479b5', '#b87817', '#dc783f', '#c24657'];
+const pages = {
+  overview: ['Resumen general', 'El resultado de cada jornada, en una sola mirada.'],
+  productivity: ['Productividad por operario', 'Cajas inspeccionadas por cada hora trabajada.'],
+  records: ['Control diario', 'Un consolidado por operario y jornada de trabajo.'],
+  classifications: ['Clasificaciones', 'Unidades observadas y su distribución por clasificación.'],
+};
 
 function Empty({ onNavigate, isAdmin }) {
-  return (
-    <div className="quality-empty">
-      <div className="quality-empty-icon">
-        <FileSpreadsheet size={29} />
-      </div>
-      <h2>Aún no hay registros para esta selección</h2>
-      <p>
-        Cuando se cargue el Excel de control diario, aquí aparecerán los
-        indicadores, tendencias e incidencias.
-      </p>
-      {isAdmin && (
-        <button
-          className="outline empty-action"
-          onClick={() => onNavigate('upload')}
-        >
-          Ir a la carga de Excel <ArrowRight size={16} />
-        </button>
-      )}
-    </div>
-  );
+  return <div className="quality-empty">
+    <div className="quality-empty-icon"><FileSpreadsheet size={29} /></div>
+    <h2>No hay jornadas para esta selección</h2>
+    <p>Ajusta las fechas o el operario para consultar otros registros.</p>
+    {isAdmin && <button className="outline empty-action" onClick={() => onNavigate('upload')}>Cargar Excel <ArrowRight size={16} /></button>}
+  </div>;
 }
-
 function KpiCard({ icon: Icon, label, value, detail, color = 'blue' }) {
-  return (
-    <div className="quality-kpi">
-      <div className="quality-kpi-top">
-        <div className={`quality-icon ${color}`}>
-          <Icon size={21} />
-        </div>
-        <span>{label}</span>
-      </div>
-      <strong>{value}</strong>
-      <small>{detail}</small>
+  return <div className="quality-kpi">
+    <div className="quality-kpi-top"><div className={`quality-icon ${color}`}><Icon size={21} /></div><span>{label}</span></div>
+    <strong>{value}</strong><small>{detail}</small>
+  </div>;
+}
+function Panel({ title, detail, action, children, className = '' }) {
+  return <section className={`quality-panel ${className}`}>
+    <div className="quality-section-title"><div><h2>{title}</h2>{detail && <span>{detail}</span>}</div>{action}</div>
+    {children}
+  </section>;
+}
+function DailyTable({ records, classifications = false }) {
+  return <div className="table-scroll" role="region" aria-label={classifications ? 'Unidades por jornada' : 'Consolidados diarios'} tabIndex={0}>
+    <table><thead><tr>
+      <th>FECHA</th><th>OPERARIO</th>
+      {classifications ? <><th>TOLERADO</th><th>MENOR</th><th>MAYOR</th><th>CRÍTICO</th><th>OBSERVADAS</th></>
+        : <><th>HORAS</th><th>INSPECCIONADAS</th><th>APROBADAS</th><th>BLOQUEADAS</th><th>CAJAS / H</th></>}
+    </tr></thead><tbody>{records.map(row => <tr key={JSON.stringify([row.date, row.operatorId])}>
+      <td>{fullDate(row.date)}</td><td className="strong-cell">{row.operatorId}</td>
+      {classifications ? <>
+        <td>{fmt.format(row.tolerated)}</td><td>{fmt.format(row.minor)}</td><td>{fmt.format(row.major)}</td><td>{fmt.format(row.critical)}</td><td className="strong-cell">{fmt.format(row.observed)}</td>
+      </> : <>
+        <td>{fmt.format(row.hours)}</td><td className="strong-cell">{fmt.format(row.inspected)}</td><td><span className="quality-count approved">{fmt.format(row.approved)}</span></td><td><span className={`quality-count ${row.blocked ? 'blocked' : ''}`}>{fmt.format(row.blocked)}</span></td><td>{fmt.format(row.productivity)}</td>
+      </>}
+    </tr>)}</tbody></table>
+  </div>;
+}
+function Productivity({ operators, compact = false }) {
+  const max = Math.max(1, ...operators.map(row => row.productivity));
+  return <div className="operator-list">{(compact ? operators.slice(0, 5) : operators).map(row => <div className="operator-item" key={row.operatorId}>
+    <div className="operator-heading"><div><span className="operator-avatar">{row.operatorId.slice(0, 1)}</span><strong>{row.operatorId}</strong></div><span><b>{fmt.format(row.productivity)}</b> cajas/h</span></div>
+    <div className="breakdown-track"><i style={{ width: `${row.productivity / max * 100}%` }} /></div>
+    <div className="operator-meta"><span>{fmt.format(row.inspected)} cajas inspeccionadas</span><span>{fmt.format(row.hours)} h · {row.workDays} {row.workDays === 1 ? 'jornada' : 'jornadas'}</span></div>
+  </div>)}</div>;
+}
+function Classifications({ rows }) {
+  return <div className="classification-grid">{rows.map((row, i) => <article className="classification-card" key={row.key} style={{ '--classification-color': classificationColors[i] }}>
+    <div><span className="classification-dot" /><h2>{row.label}</h2><LockKeyhole size={15} /></div>
+    <strong>{fmt.format(row.units)} <small>unidades</small></strong>
+    <div className="classification-track"><i style={{ width: `${row.percentage}%` }} /></div>
+    <p>{fmt.format(row.percentage)}% de las unidades observadas</p>
+    <span className="classification-status">Implica bloqueo</span>
+  </article>)}</div>;
+}
+function DailyChart({ daily }) {
+  return <div className="quality-chart" role="img" aria-label="Cajas aprobadas y bloqueadas por día; valores disponibles en Control diario">
+    <ResponsiveContainer width="100%" height="100%"><BarChart data={daily} margin={{ top: 18, right: 8, bottom: 0, left: -20 }}>
+      <CartesianGrid vertical={false} stroke="#e9eef5" strokeDasharray="4 4" />
+      <XAxis dataKey="date" tickFormatter={dateLabel} tickLine={false} axisLine={false} tick={{ fill: '#8090a6', fontSize: 11 }} />
+      <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: '#8090a6', fontSize: 11 }} />
+      <Tooltip labelFormatter={fullDate} formatter={v => `${fmt.format(v)} cajas`} cursor={{ fill: '#f2f5fa' }} />
+      <Bar dataKey="approved" name="Aprobadas" stackId="boxes" fill="#29936e" maxBarSize={42} />
+      <Bar dataKey="blocked" name="Bloqueadas" stackId="boxes" fill="#df9653" radius={[5, 5, 0, 0]} maxBarSize={42} />
+    </BarChart></ResponsiveContainer>
+  </div>;
+}
+
+export function QualityContent({ page, dashboard, loading, from, to, setFrom, setTo, operator, setOperator, onNavigate, isAdmin = false }) {
+  const { summary, daily = [], operators = [], records = [], classifications = [], options = { operators: [] } } = dashboard || {};
+  const [title, subtitle] = pages[page];
+  return <>
+    <div className="quality-header"><div><div className="eyebrow">SERVICIO DE CONTROL DE CALIDAD</div><h1>{title}</h1><p>{subtitle}</p></div><span className="quality-version">CALIDAD V2 <span>20 unidades / caja</span></span></div>
+    <div className="quality-filters">
+      <label><CalendarDays size={16} /><span>Desde</span><input aria-label="Fecha inicial" type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
+      <label><span>Hasta</span><input aria-label="Fecha final" type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+      <label><UsersRound size={16} /><span>Operario</span><select aria-label="Operario" value={operator} onChange={e => setOperator(e.target.value)}>
+        <option value="">Todos los operarios</option>
+        {operator && !options.operators.includes(operator) && <option value={operator}>{operator}</option>}
+        {options.operators.map(value => <option key={value}>{value}</option>)}
+      </select></label>
     </div>
-  );
-}
-
-function DataTable({ records }) {
-  return (
-    <>
-      <p className="table-balance-note">
-        Disponibles = recibidas + pendientes iniciales. Pendientes finales = disponibles − inspeccionadas.
-      </p>
-      <div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>FECHA</th>
-              <th>TURNO</th>
-              <th>LOTE</th>
-              <th>PRODUCTO</th>
-              <th>RECIBIDAS</th>
-              <th>PEND. INICIALES</th>
-              <th>DISPONIBLES</th>
-              <th>INSPECCIONADAS</th>
-              <th>APROBADAS</th>
-              <th>RECHAZADAS</th>
-              <th>MERMA*</th>
-              <th>PEND. FINALES</th>
-            </tr>
-          </thead>
-          <tbody>
-            {records.map(r => (
-              <tr key={r.id}>
-                <td className="strong-cell">{fullDate(r.date)}</td>
-                <td>{r.shift}</td>
-                <td>{r.lot}</td>
-                <td>{r.product}</td>
-                <td>{fmt.format(r.received)}</td>
-                <td>{fmt.format(r.pendingStart)}</td>
-                <td>{fmt.format(r.received + r.pendingStart)}</td>
-                <td>{fmt.format(r.inspected)}</td>
-                <td>{fmt.format(r.approved)}</td>
-                <td>{fmt.format(r.rejected)}</td>
-                <td>{fmt.format(r.waste)}</td>
-                <td>{fmt.format(r.pendingEnd)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-}
-
-function IncidentTable({ incidents }) {
-  return (
-    <div className="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>FECHA</th>
-            <th>LOTE</th>
-            <th>PRODUCTO</th>
-            <th>DEFECTO</th>
-            <th>CAJAS AFECTADAS</th>
-            <th>DESTINO</th>
-            <th>RESPONSABLE</th>
-          </tr>
-        </thead>
-        <tbody>
-          {incidents.map(i => (
-            <tr key={i.id}>
-              <td className="strong-cell">{fullDate(i.date)}</td>
-              <td>{i.lot}</td>
-              <td>{i.product}</td>
-              <td>{i.defect}</td>
-              <td>{fmt.format(i.affected)}</td>
-              <td>{i.action || '—'}</td>
-              <td>{i.responsible || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function Breakdown({ title, rows }) {
-  const max = Math.max(1, ...rows.map(r => r.inspected));
-  return (
-    <div className="quality-panel">
-      <div className="quality-section-title">
-        <h2>{title}</h2>
-        <span>Cajas inspeccionadas</span>
-      </div>
-      <div className="breakdown-list">
-        {rows.map(row => {
-          const width = (row.inspected / max) * 100;
-          return (
-            <div className="breakdown-item" key={row.name}>
-              <div>
-                <strong>{row.name}</strong>
-                <span>{fmt.format(row.inspected)} cajas</span>
-              </div>
-              <div className="breakdown-track">
-                <i style={{ width: `${width}%` }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-export function QualityContent({
-  page,
-  dashboard,
-  loading,
-  from,
-  to,
-  setFrom,
-  setTo,
-  product,
-  setProduct,
-  onNavigate,
-  isAdmin = false
-}) {
-  const {
-    summary,
-    daily = [],
-    byProduct = [],
-    records = [],
-    incidents = [],
-    options = { products: [] }
-  } = dashboard || {};
-  const cumulative = useMemo(() => {
-    let received = 0,
-      inspected = 0;
-    return daily.map(day => ({
-      date: dateLabel(day.date),
-      recibidas: (received += day.received),
-      inspeccionadas: (inspected += day.inspected)
-    }));
-  }, [daily]);
-  const title =
-    page === 'overview'
-      ? 'Servicio de Control de Calidad'
-      : page === 'records'
-        ? 'Control diario'
-        : 'Incidencias';
-  const subtitle =
-    page === 'overview'
-      ? 'Recepción, inspección y control de mercadería'
-      : page === 'records'
-        ? 'Detalle por fecha y lote'
-        : 'Defectos y acciones registrados por lote';
-  return (
-    <>
-      <div className="quality-header">
-        <div>
-          <div className="eyebrow">
-            {page === 'overview' ? 'PANORAMA OPERATIVO' : 'DETALLE OPERATIVO'}
-          </div>
-          <h1>{title}</h1>
-          <p>{subtitle}</p>
-        </div>
-      </div>
-      <div className="quality-filters">
-        <label>
-          <CalendarDays size={16} />
-          <span>Desde</span>
-          <input
-            aria-label="Fecha inicial"
-            type="date"
-            value={from}
-            onChange={e => setFrom(e.target.value)}
-          />
-        </label>
-        <label>
-          <span>Hasta</span>
-          <input
-            aria-label="Fecha final"
-            type="date"
-            value={to}
-            onChange={e => setTo(e.target.value)}
-          />
-        </label>
-        <label>
-          <Boxes size={16} />
-          <span>Producto</span>
-          <select
-            aria-label="Producto"
-            value={product}
-            onChange={e => setProduct(e.target.value)}
-          >
-            <option value="">Todos</option>
-            {options.products.map(v => (
-              <option key={v}>{v}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-      {!records.length ? (
-        <Empty onNavigate={onNavigate} isAdmin={isAdmin} />
-      ) : page === 'overview' ? (
-        <div className="quality-body">
+    {loading ? <div className="quality-empty" role="status"><div className="spinner" />Cargando jornadas…</div>
+      : !dashboard ? <div className="quality-empty" role="status">No se pudieron cargar los datos. Revisa el aviso y el rango de fechas.</div>
+      : !records.length ? <Empty onNavigate={onNavigate} isAdmin={isAdmin} />
+      : <div className="quality-body">
+        {page === 'overview' && <>
           <div className="quality-kpi-grid">
-            <KpiCard
-              icon={PackageCheck}
-              label="Cajas recibidas"
-              value={fmt.format(summary.received)}
-              detail="Total del periodo"
-            />
-            <KpiCard
-              icon={ClipboardCheck}
-              label="Cajas inspeccionadas"
-              value={fmt.format(summary.inspected)}
-              detail="Total del periodo"
-              color="green"
-            />
-            <KpiCard
-              icon={CircleCheck}
-              label="Aprobación"
-              value={`${fmt.format(summary.approvalRate)}%`}
-              detail={`${fmt.format(summary.approved)} de ${fmt.format(summary.available)} disponibles`}
-              color="teal"
-            />
-            <KpiCard
-              icon={Clock3}
-              label="Pendientes al cierre"
-              value={fmt.format(summary.pendingEnd)}
-              detail={`Saldo general · ${fullDate(summary.pendingDate)}`}
-              color="orange"
-            />
+            <KpiCard icon={ClipboardCheck} label="Cajas inspeccionadas" value={fmt.format(summary.inspected)} detail={`${fmt.format(summary.inspectedUnits)} unidades revisadas`} />
+            <KpiCard icon={CircleCheck} label="Cajas aprobadas" value={fmt.format(summary.approved)} detail={`${fmt.format(summary.approvalRate)}% de las inspeccionadas`} color="green" />
+            <KpiCard icon={LockKeyhole} label="Cajas bloqueadas" value={fmt.format(summary.blocked)} detail={`${fmt.format(summary.blockedRate)}% de las inspeccionadas`} color="orange" />
+            <KpiCard icon={TrendingUp} label="Productividad" value={fmt.format(summary.productivity)} detail="Cajas por hora-persona" color="teal" />
           </div>
           <div className="quality-secondary">
-            <div>
-              <strong>{fmt.format(summary.rejected)}</strong>
-              <span>Cajas rechazadas</span>
-            </div>
-            <div>
-              <strong>{fmt.format(summary.waste)}</strong>
-              <span>
-                Cajas con merma <em>informativo</em>
-              </span>
-            </div>
-            <div>
-              <strong>{fmt.format(summary.productivity)}</strong>
-              <span>Cajas por hora-persona</span>
-            </div>
-            <div>
-              <strong>{fmt.format(summary.completionGeneral)}%</strong>
-              <span>Inspección general del periodo</span>
-            </div>
+            <div><strong>{summary.operatorCount}</strong><span>Operarios en el periodo</span></div>
+            <div><strong>{summary.daysWithRecords}</strong><span>Días con registros</span></div>
+            <div><strong>{fmt.format(summary.hours)} h</strong><span>Horas-persona acumuladas</span></div>
+            <div><strong>{fmt.format(summary.observed)}</strong><span>Unidades observadas</span></div>
           </div>
           <div className="quality-main-grid">
-            <div className="quality-panel chart-panel">
-              <div className="quality-section-title">
-                <div>
-                  <h2>Avance acumulado</h2>
-                  <span>Las líneas suman las cajas desde el inicio del periodo</span>
-                </div>
-                <span>{daily.length} días</span>
-              </div>
-              <div className="quality-chart">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={cumulative}
-                    margin={{ top: 18, right: 15, bottom: 0, left: -14 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="inspectedFill"
-                        x1="0"
-                        x2="0"
-                        y1="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="0%"
-                          stopColor="#23845e"
-                          stopOpacity=".25"
-                        />
-                        <stop
-                          offset="100%"
-                          stopColor="#23845e"
-                          stopOpacity="0"
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      vertical={false}
-                      stroke="#e9eef5"
-                      strokeDasharray="4 4"
-                    />
-                    <XAxis
-                      dataKey="date"
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fill: '#8090a6', fontSize: 11 }}
-                    />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fill: '#8090a6', fontSize: 11 }}
-                    />
-                    <Tooltip formatter={v => fmt.format(v)} />
-                    <Area
-                      type="monotone"
-                      dataKey="recibidas"
-                      name="Recibidas"
-                      stroke="#3869ac"
-                      strokeWidth={2}
-                      fill="transparent"
-                      dot={false}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="inspeccionadas"
-                      name="Inspeccionadas"
-                      stroke="#16865a"
-                      strokeWidth={3}
-                      fill="url(#inspectedFill)"
-                      dot={false}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="chart-legend">
-                <span>
-                  <i className="blue-dot" /> Recibidas
-                </span>
-                <span>
-                  <i className="green-dot" /> Inspeccionadas
-                </span>
-              </div>
-            </div>
-            <div className="quality-panel">
-              <div className="quality-section-title">
-                <div>
-                  <h2>Control de calidad</h2>
-                  <span>Resultado sobre cajas disponibles</span>
-                </div>
-              </div>
+            <Panel title="Inspección diaria" detail="Cajas aprobadas y bloqueadas en cada jornada">
+              <DailyChart daily={daily} /><div className="chart-legend"><span><i className="green-dot" /> Aprobadas</span><span><i className="orange-dot" /> Bloqueadas</span></div>
+            </Panel>
+            <Panel title="Resultado de inspección" detail="Sobre el total de cajas inspeccionadas">
               <div className="donut-wrap">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: 'Aprobadas', value: summary.approved },
-                        { name: 'Rechazadas', value: summary.rejected },
-                        { name: 'Pendientes de inspección', value: summary.pendingToInspect }
-                      ]}
-                      dataKey="value"
-                      innerRadius="66%"
-                      outerRadius="86%"
-                      stroke="none"
-                    >
-                      <Cell fill="#17935e" />
-                      <Cell fill="#e5eaf1" />
-                      <Cell fill="#eead62" />
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="donut-center">
-                  <strong>{fmt.format(summary.approvalRate)}%</strong>
-                  <span>aprobación</span>
-                </div>
+                <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={summary.inspected ? [{ name: 'Aprobadas', value: summary.approved }, { name: 'Bloqueadas', value: summary.blocked }] : [{ name: 'Sin inspección', value: 1 }]} dataKey="value" innerRadius="68%" outerRadius="86%" stroke="none"><Cell fill={summary.inspected ? '#29936e' : '#e5eaf1'} /><Cell fill="#df9653" /></Pie></PieChart></ResponsiveContainer>
+                <div className="donut-center"><strong>{fmt.format(summary.approvalRate)}%</strong><span>aprobación</span></div>
               </div>
-              <div className="donut-legend">
-                <div className="donut-total">
-                  <span>Disponibles</span>
-                  <strong>{fmt.format(summary.available)}</strong>
-                </div>
-                <div>
-                  <span>Pendientes iniciales</span>
-                  <strong>{fmt.format(summary.openingPending)}</strong>
-                </div>
-                <div>
-                  <span>Recibidas</span>
-                  <strong>{fmt.format(summary.received)}</strong>
-                </div>
-                <div>
-                  <span>Inspeccionadas</span>
-                  <strong>{fmt.format(summary.inspected)}</strong>
-                </div>
-                <div>
-                  <i className="green-dot" /> Aprobadas{' '}
-                  <strong>{fmt.format(summary.approved)}</strong>
-                </div>
-                <div>
-                  <i className="gray-dot" /> Rechazadas{' '}
-                  <strong>{fmt.format(summary.rejected)}</strong>
-                </div>
-                <div>
-                  <i className="orange-dot" /> Pendientes de inspección{' '}
-                  <strong>{fmt.format(summary.pendingToInspect)}</strong>
-                </div>
-              </div>
-              <p className="donut-formula">
-                Aprobación = aprobadas ÷ (recibidas + pendientes iniciales)
-              </p>
-            </div>
+              <div className="donut-legend"><div><i className="green-dot" /> Aprobadas<strong>{fmt.format(summary.approved)}</strong></div><div><i className="orange-dot" /> Bloqueadas<strong>{fmt.format(summary.blocked)}</strong></div></div>
+              <p className="donut-formula">Aprobadas ÷ inspeccionadas × 100</p>
+            </Panel>
           </div>
-          <div className="quality-panel daily-detail">
-            <div className="quality-section-title">
-              <div>
-                <h2>Detalle diario del gráfico</h2>
-                <span>Valores de cada día; el gráfico muestra su suma acumulada</span>
-              </div>
-            </div>
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>FECHA</th>
-                    <th>PEND. INICIALES</th>
-                    <th>RECIBIDAS</th>
-                    <th>INSPECCIONADAS</th>
-                    <th>APROBADAS</th>
-                    <th>RECHAZADAS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {daily.map(day => (
-                    <tr key={day.date}>
-                      <td className="strong-cell">{fullDate(day.date)}</td>
-                      <td>{fmt.format(day.pendingStart)}</td>
-                      <td>{fmt.format(day.received)}</td>
-                      <td>{fmt.format(day.inspected)}</td>
-                      <td>{fmt.format(day.approved)}</td>
-                      <td>{fmt.format(day.rejected)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <Breakdown title="Inspección por producto" rows={byProduct} />
-          <div className="quality-panel">
-            <div className="quality-section-title">
-              <div>
-                <h2>Registros recientes</h2>
-                <span>Detalle de las últimas operaciones</span>
-              </div>
-              <button
-                className="text-link"
-                onClick={() => onNavigate('records')}
-              >
-                Ver todos <ArrowRight size={16} />
-              </button>
-            </div>
-            <DataTable records={records.slice(0, 5)} />
-          </div>
-        </div>
-      ) : (
-        <div className="quality-panel detail-panel">
-          <div className="quality-section-title">
-            <div>
-              <h2>
-                {page === 'records'
-                  ? 'Detalle de operaciones'
-                  : 'Detalle de incidencias'}
-              </h2>
-              <span>
-                {page === 'records'
-                  ? `${records.length} registros`
-                  : `${incidents.length} incidencias`}
-              </span>
-            </div>
-          </div>
-          {page === 'records' ? (
-            <DataTable records={records} />
-          ) : incidents.length ? (
-            <IncidentTable incidents={incidents} />
-          ) : (
-            <div className="no-incidents">
-              <CircleCheck size={25} />
-              <strong>No hay incidencias para esta selección</strong>
-            </div>
-          )}
-        </div>
-      )}
-      <div className="quality-note">
-        <AlertTriangle size={16} />
-        <span>
-          La merma se muestra como cantidad informativa. El saldo pendiente
-          corresponde al cierre general más reciente del rango y no se divide
-          por producto.
-        </span>
-      </div>
-    </>
-  );
+          <Panel title="Productividad por operario" detail="Total de cajas ÷ total de horas del periodo" action={<button className="text-link" onClick={() => onNavigate('productivity')}>Ver detalle <ArrowRight size={16} /></button>}><Productivity operators={operators} compact /></Panel>
+          <Panel title="Últimas jornadas" detail="Consolidados más recientes del periodo" action={<button className="text-link" onClick={() => onNavigate('records')}>Ver todas <ArrowRight size={16} /></button>}><DailyTable records={records.slice(0, 5)} /></Panel>
+        </>}
+        {page === 'productivity' && <>
+          <div className="quality-formula"><Clock3 size={22} /><div><strong>Una medida común para cada operario</strong><p>Productividad = cajas inspeccionadas ÷ horas trabajadas. El periodo usa la suma de cajas y de horas.</p></div></div>
+          <Panel title="Productividad del periodo" detail={`${operators.length} operarios · cajas por hora trabajada`}><Productivity operators={operators} /></Panel>
+          <Panel title="Detalle por operario" detail="Totales para las fechas seleccionadas"><div className="table-scroll" tabIndex={0}><table><thead><tr><th>OPERARIO</th><th>JORNADAS</th><th>HORAS</th><th>INSPECCIONADAS</th><th>APROBADAS</th><th>BLOQUEADAS</th><th>CAJAS / H</th></tr></thead><tbody>{operators.map(row => <tr key={row.operatorId}><td className="strong-cell">{row.operatorId}</td><td>{row.workDays}</td><td>{fmt.format(row.hours)}</td><td>{fmt.format(row.inspected)}</td><td>{fmt.format(row.approved)}</td><td>{fmt.format(row.blocked)}</td><td className="strong-cell">{fmt.format(row.productivity)}</td></tr>)}</tbody></table></div></Panel>
+        </>}
+        {page === 'records' && <Panel title="Consolidados diarios" detail={`${records.length} ${records.length === 1 ? 'jornada' : 'jornadas'} · inspeccionadas = aprobadas + bloqueadas`}><DailyTable records={records} /></Panel>}
+        {page === 'classifications' && <>
+          <div className="quality-formula"><LockKeyhole size={22} /><div><strong>Las cuatro clasificaciones implican bloqueo</strong><p>Se cuentan unidades observadas, no cajas. Cada unidad se registra en una sola clasificación, incluido Tolerado.</p></div></div>
+          <Classifications rows={classifications} />
+          <Panel title="Unidades observadas por jornada" detail={`${fmt.format(summary.observed)} unidades en ${fmt.format(summary.blocked)} cajas bloqueadas`}><DailyTable records={records} classifications /></Panel>
+        </>}
+      </div>}
+    <div className="quality-note"><AlertTriangle size={16} /><span>Cada caja contiene 20 unidades. Una caja con unidades Tolerado, Menor, Mayor o Crítico queda bloqueada.</span></div>
+  </>;
 }

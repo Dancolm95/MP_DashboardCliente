@@ -11,39 +11,22 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   expires_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS quality_records (
-  id TEXT PRIMARY KEY,
-  record_key TEXT NOT NULL UNIQUE,
-  report_date TEXT NOT NULL,
-  row_order INTEGER NOT NULL,
-  shift TEXT NOT NULL,
-  lot TEXT NOT NULL,
-  product TEXT NOT NULL,
-  received REAL NOT NULL,
-  pending_start REAL NOT NULL,
-  inspected REAL NOT NULL,
-  approved REAL NOT NULL,
-  rejected REAL NOT NULL,
-  waste REAL NOT NULL,
-  pending_end REAL NOT NULL,
-  staff REAL NOT NULL,
-  hours_per_person REAL NOT NULL,
-  observations TEXT NOT NULL,
+-- Calidad V2: una fila por operario y fecha, sin identificadores de caja.
+CREATE TABLE IF NOT EXISTS quality_workdays (
+  operator_id TEXT NOT NULL CHECK (length(trim(operator_id)) BETWEEN 1 AND 100 AND operator_id = trim(operator_id)),
+  report_date TEXT NOT NULL CHECK (length(report_date) = 10 AND date(report_date, '+0 days') IS NOT NULL AND date(report_date, '+0 days') = report_date),
+  hours REAL NOT NULL CHECK (hours > 0 AND hours <= 24),
+  approved INTEGER NOT NULL CHECK (approved >= 0),
+  blocked INTEGER NOT NULL CHECK (blocked >= 0),
+  tolerated INTEGER NOT NULL CHECK (tolerated >= 0),
+  minor INTEGER NOT NULL CHECK (minor >= 0),
+  major INTEGER NOT NULL CHECK (major >= 0),
+  critical INTEGER NOT NULL CHECK (critical >= 0),
   uploaded_by TEXT NOT NULL REFERENCES users(id),
   uploaded_at TEXT NOT NULL,
-  source_name TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS quality_incidents (
-  id TEXT PRIMARY KEY,
-  record_id TEXT NOT NULL REFERENCES quality_records(id) ON DELETE CASCADE,
-  report_date TEXT NOT NULL,
-  lot TEXT NOT NULL,
-  product TEXT NOT NULL,
-  defect TEXT NOT NULL,
-  affected REAL NOT NULL,
-  action TEXT NOT NULL,
-  observation TEXT NOT NULL,
-  responsible TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_quality_records_date ON quality_records(report_date);
-CREATE INDEX IF NOT EXISTS idx_quality_incidents_date ON quality_incidents(report_date);
+  source_name TEXT NOT NULL,
+  PRIMARY KEY (operator_id, report_date),
+  CHECK ((approved + blocked) <= 450359962737049),
+  CHECK (tolerated + minor + major + critical BETWEEN blocked AND blocked * 20)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_quality_workdays_date ON quality_workdays(report_date);

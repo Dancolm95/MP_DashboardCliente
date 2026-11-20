@@ -49,3 +49,45 @@ CREATE TABLE quality_incidents (
 );
 CREATE INDEX idx_quality_records_date ON quality_records(report_date);
 CREATE INDEX idx_quality_incidents_date ON quality_incidents(report_date);
+
+CREATE TABLE clasificaciones (
+  id_clasificacion VARCHAR2(20) PRIMARY KEY,
+  nombre VARCHAR2(50) NOT NULL UNIQUE
+);
+INSERT INTO clasificaciones VALUES ('TOLERADO', 'Tolerado');
+INSERT INTO clasificaciones VALUES ('MENOR', 'Menor');
+INSERT INTO clasificaciones VALUES ('MAYOR', 'Mayor');
+INSERT INTO clasificaciones VALUES ('CRITICO', 'Crítico');
+
+CREATE TABLE operarios (
+  id_operario VARCHAR2(50) PRIMARY KEY
+);
+CREATE TABLE trabajo_diario_operario (
+  id_operario VARCHAR2(50) NOT NULL REFERENCES operarios(id_operario),
+  fecha VARCHAR2(10) NOT NULL,
+  horas_trabajadas NUMBER(10,2) NOT NULL CHECK (horas_trabajadas > 0),
+  PRIMARY KEY (id_operario, fecha)
+);
+CREATE TABLE cajas (
+  codigo VARCHAR2(100) PRIMARY KEY,
+  fecha VARCHAR2(10) NOT NULL,
+  id_operario VARCHAR2(50) NOT NULL,
+  FOREIGN KEY (id_operario, fecha)
+    REFERENCES trabajo_diario_operario(id_operario, fecha)
+);
+CREATE INDEX idx_cajas_fecha ON cajas(fecha);
+CREATE TABLE composicion_caja (
+  codigo_caja VARCHAR2(100) NOT NULL REFERENCES cajas(codigo),
+  momento VARCHAR2(10) NOT NULL CHECK (momento IN ('inicial', 'cierre')),
+  optimas NUMBER(2) NOT NULL CHECK (optimas BETWEEN 0 AND 20),
+  PRIMARY KEY (codigo_caja, momento)
+);
+CREATE TABLE detalle_composicion (
+  codigo_caja VARCHAR2(100) NOT NULL,
+  momento VARCHAR2(10) NOT NULL,
+  id_clasificacion VARCHAR2(20) NOT NULL REFERENCES clasificaciones(id_clasificacion),
+  cantidad NUMBER(2) NOT NULL CHECK (cantidad BETWEEN 1 AND 20),
+  PRIMARY KEY (codigo_caja, momento, id_clasificacion),
+  FOREIGN KEY (codigo_caja, momento)
+    REFERENCES composicion_caja(codigo_caja, momento)
+);
