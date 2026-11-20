@@ -42,7 +42,8 @@ async function api(path, options = {}) {
       body?.error || 'No se pudo completar la operación.'
     );
     error.status = response.status;
-    if (response.status === 401) window.dispatchEvent(new Event('mp-session-expired'));
+    if (response.status === 401)
+      window.dispatchEvent(new Event('mp-session-expired'));
     throw error;
   }
   return body;
@@ -94,7 +95,8 @@ function App() {
   const reload = () => {
     const version = sessionVersion.current;
     const request = ++requestVersion.current;
-    const current = () => sessionVersion.current === version && requestVersion.current === request;
+    const current = () =>
+      sessionVersion.current === version && requestVersion.current === request;
     setLoading(true);
     setDashboard(null);
     api(
@@ -103,7 +105,7 @@ function App() {
       .then(data => {
         if (current()) {
           setDashboard(data);
-          setNotice(previous => previous?.type === 'error' ? null : previous);
+          setNotice(previous => (previous?.type === 'error' ? null : previous));
         }
       })
       .catch(error => {
@@ -154,7 +156,11 @@ function App() {
           <div className="brand-mark">
             <img src="/Logo%20MP360.svg" alt="MP360" />
           </div>
-          <button aria-label="Cerrar menú" className="mobile-close" onClick={() => setMobileOpen(false)}>
+          <button
+            aria-label="Cerrar menú"
+            className="mobile-close"
+            onClick={() => setMobileOpen(false)}
+          >
             <X size={20} />
           </button>
         </div>
@@ -200,7 +206,11 @@ function App() {
       <main className="main">
         <header className="topbar">
           <div className="topbar-left">
-            <button aria-label="Abrir menú" className="mobile-menu" onClick={() => setMobileOpen(true)}>
+            <button
+              aria-label="Abrir menú"
+              className="mobile-menu"
+              onClick={() => setMobileOpen(true)}
+            >
               <Menu size={22} />
             </button>
             <strong>{nav.find(n => n.id === page)?.label}</strong>
@@ -228,7 +238,9 @@ function App() {
               </button>
             </div>
           )}
-          {['overview', 'productivity', 'records', 'classifications'].includes(page) && (
+          {['overview', 'productivity', 'records', 'classifications'].includes(
+            page
+          ) && (
             <QualityContent
               page={page}
               dashboard={dashboard}
@@ -397,11 +409,23 @@ function Login({ onLogin }) {
 }
 
 function FileFormat() {
-  return <div><strong>Una fila por operario y fecha</strong>
-    <p>Columnas obligatorias: Fecha, Operario, Horas trabajadas, Cajas aprobadas, Cajas bloqueadas, Tolerado, Menor, Mayor y Crítico.</p>
-    <p>Fecha: AAAA-MM-DD o fecha Excel. Las cuatro clasificaciones cuentan unidades; usa 0 cuando no haya observadas. Cada caja tiene 20 unidades.</p>
-    <p>Inspeccionadas = aprobadas + bloqueadas. Una jornada ya cargada rechaza todo el archivo. Máximo 3000 jornadas.</p>
-  </div>;
+  return (
+    <div>
+      <strong>Una fila por operario y fecha</strong>
+      <p>
+        Columnas obligatorias: Fecha, Operario, Horas trabajadas, Cajas
+        aprobadas, Cajas bloqueadas, Tolerado, Menor, Mayor y Crítico.
+      </p>
+      <p>
+        Fecha: AAAA-MM-DD o fecha Excel. Las cuatro clasificaciones cuentan
+        unidades; usa 0 cuando no haya observadas. Cada caja tiene 20 unidades.
+      </p>
+      <p>
+        Inspeccionadas = aprobadas + bloqueadas. Una jornada ya cargada rechaza
+        todo el archivo. Máximo 3000 jornadas.
+      </p>
+    </div>
+  );
 }
 
 function UploadPage({ onSuccess }) {
@@ -555,7 +579,12 @@ function UsersPage({ setNotice }) {
     }
   }
   async function removeViewer(user) {
-    if (!window.confirm(`¿Eliminar la cuenta de ${user.name}? Perderá acceso inmediatamente.`)) return;
+    if (
+      !window.confirm(
+        `¿Eliminar la cuenta de ${user.name}? Perderá acceso inmediatamente.`
+      )
+    )
+      return;
     setDeletingId(user.id);
     try {
       await api(`/users/${encodeURIComponent(user.id)}`, { method: 'DELETE' });
