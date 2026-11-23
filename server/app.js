@@ -99,7 +99,7 @@ export function createApp(repo, { now = () => Date.now() } = {}) {
   }));
 
   const requireBellia = (_req, _res, next) => {
-    if (repo.qualityVersion !== 3) return next(Object.assign(new Error('Bellia requiere el adaptador SQLite.'), { status: 503 }));
+    if (repo.qualityVersion !== 3) return next(Object.assign(new Error('Bellia requiere un adaptador de base compatible.'), { status: 503 }));
     next();
   };
   app.get('/api/dashboard', requireAuth, requireBellia, asyncRoute(async (req, res) => {

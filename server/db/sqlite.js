@@ -10,17 +10,18 @@ export function createSqliteRepository(path) {
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
   const version = db.prepare('PRAGMA user_version').get().user_version;
   if (version !== 0 && version !== 3) { db.close(); throw new Error('Bellia requiere una base SQLite nueva.'); }
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    if (version === 0 && db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1").get()) {
+  if (version === 0) {
+    if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1").get()) {
+      db.close();
       throw new Error('Bellia requiere una base SQLite nueva.');
     }
-    db.exec(readFileSync(new URL('./schema.sqlite.sql', import.meta.url), 'utf8'));
-    db.exec('PRAGMA user_version = 3; COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    db.close();
-    throw error;
+    try {
+      db.exec(readFileSync(new URL('./schema.sqlite.sql', import.meta.url), 'utf8'));
+    } catch (error) {
+      try { db.exec('ROLLBACK'); } catch { /* El script pudo cerrar la transacción. */ }
+      db.close();
+      throw error;
+    }
   }
   const userFields = 'id, email, name, password_hash AS passwordHash, role, created_at AS createdAt';
   const repo = {
@@ -94,7 +95,7 @@ export function createSqliteRepository(path) {
       } catch (error) {
         db.exec('ROLLBACK');
         if (error.message?.includes('UNIQUE constraint failed: quality_')) {
-          throw new DuplicateRecordError('Ya existe una jornada de mesa o un detalle de pieza para esa fecha. No se importó ninguna fila.');
+          throw new DuplicateRecordError();
         }
         throw error;
       }

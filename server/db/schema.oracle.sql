@@ -1,94 +1,54 @@
--- Apply once in the application schema. If your DBA supplies existing tables,
--- map the Oracle adapter to those tables instead of running this file.
+-- Bellia: ejecutar una vez en un esquema Oracle nuevo y vacío.
+-- Crea la estructura; npm run seed crea el administrador y la aplicación importa el Excel.
+-- No migra las tablas del dashboard anterior.
+
 CREATE TABLE users (
-  id VARCHAR2(36) PRIMARY KEY,
-  email VARCHAR2(255) NOT NULL UNIQUE,
-  name VARCHAR2(200) NOT NULL,
-  password_hash VARCHAR2(300) NOT NULL,
-  role VARCHAR2(10) NOT NULL CHECK (role IN ('admin', 'viewer')),
-  created_at VARCHAR2(30) NOT NULL
+  id VARCHAR2(36 CHAR) PRIMARY KEY,
+  email VARCHAR2(255 CHAR) NOT NULL UNIQUE,
+  name VARCHAR2(100 CHAR) NOT NULL,
+  password_hash VARCHAR2(300 CHAR) NOT NULL,
+  role VARCHAR2(10 CHAR) NOT NULL CHECK (role IN ('admin', 'viewer')),
+  created_at VARCHAR2(30 CHAR) NOT NULL
 );
+
 CREATE TABLE sessions (
-  token_hash VARCHAR2(64) PRIMARY KEY,
-  user_id VARCHAR2(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  expires_at VARCHAR2(30) NOT NULL,
-  last_activity_at VARCHAR2(30)
+  token_hash VARCHAR2(64 CHAR) PRIMARY KEY,
+  user_id VARCHAR2(36 CHAR) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at VARCHAR2(30 CHAR) NOT NULL,
+  last_activity_at VARCHAR2(30 CHAR)
 );
-CREATE TABLE quality_records (
-  id VARCHAR2(36) PRIMARY KEY,
-  record_key VARCHAR2(400) NOT NULL UNIQUE,
-  report_date VARCHAR2(10) NOT NULL,
-  row_order NUMBER(8) NOT NULL,
-  shift VARCHAR2(50) NOT NULL,
-  lot VARCHAR2(150) NOT NULL,
-  product VARCHAR2(150) NOT NULL,
-  received NUMBER(18,3) NOT NULL,
-  pending_start NUMBER(18,3) NOT NULL,
-  inspected NUMBER(18,3) NOT NULL,
-  approved NUMBER(18,3) NOT NULL,
-  rejected NUMBER(18,3) NOT NULL,
-  waste NUMBER(18,3) NOT NULL,
-  pending_end NUMBER(18,3) NOT NULL,
-  staff NUMBER(18,3) NOT NULL,
-  hours_per_person NUMBER(18,3) NOT NULL,
-  observations VARCHAR2(2000),
-  uploaded_by VARCHAR2(36) NOT NULL REFERENCES users(id),
-  uploaded_at VARCHAR2(30) NOT NULL,
-  source_name VARCHAR2(255) NOT NULL
-);
-CREATE TABLE quality_incidents (
-  id VARCHAR2(36) PRIMARY KEY,
-  record_id VARCHAR2(36) NOT NULL REFERENCES quality_records(id) ON DELETE CASCADE,
-  report_date VARCHAR2(10) NOT NULL,
-  lot VARCHAR2(150) NOT NULL,
-  product VARCHAR2(150) NOT NULL,
-  defect VARCHAR2(150) NOT NULL,
-  affected NUMBER(18,3) NOT NULL,
-  action VARCHAR2(150),
-  observation VARCHAR2(2000),
-  responsible VARCHAR2(150)
-);
-CREATE INDEX idx_quality_records_date ON quality_records(report_date);
-CREATE INDEX idx_quality_incidents_date ON quality_incidents(report_date);
 
-CREATE TABLE clasificaciones (
-  id_clasificacion VARCHAR2(20) PRIMARY KEY,
-  nombre VARCHAR2(50) NOT NULL UNIQUE
+-- Una jornada por fecha y mesa; el detalle de fallas no identifica la mesa.
+CREATE TABLE quality_table_days (
+  table_name VARCHAR2(100 CHAR) NOT NULL,
+  report_date VARCHAR2(10 CHAR) NOT NULL
+    CHECK (REGEXP_LIKE(report_date, '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')),
+  staff NUMBER(16,0) NOT NULL CHECK (staff >= 1),
+  hours BINARY_DOUBLE NOT NULL CHECK (hours >= 8 AND hours <= 24),
+  approved NUMBER(16,0) NOT NULL CHECK (approved >= 0),
+  blocked NUMBER(16,0) NOT NULL CHECK (blocked >= 0),
+  detail_provided NUMBER(1,0) NOT NULL CHECK (detail_provided IN (0, 1)),
+  uploaded_by VARCHAR2(36 CHAR) NOT NULL REFERENCES users(id),
+  uploaded_at VARCHAR2(30 CHAR) NOT NULL,
+  source_name VARCHAR2(100 CHAR) NOT NULL,
+  CONSTRAINT pk_quality_table_days PRIMARY KEY (table_name, report_date),
+  CONSTRAINT ck_quality_boxes CHECK (approved + blocked <= 450359962737049)
 );
-INSERT INTO clasificaciones VALUES ('TOLERADO', 'Tolerado');
-INSERT INTO clasificaciones VALUES ('MENOR', 'Menor');
-INSERT INTO clasificaciones VALUES ('MAYOR', 'Mayor');
-INSERT INTO clasificaciones VALUES ('CRITICO', 'Crítico');
+CREATE INDEX idx_quality_table_days_date ON quality_table_days(report_date);
 
-CREATE TABLE operarios (
-  id_operario VARCHAR2(50) PRIMARY KEY
+CREATE TABLE quality_piece_details (
+  report_date VARCHAR2(10 CHAR) NOT NULL
+    CHECK (REGEXP_LIKE(report_date, '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')),
+  piece VARCHAR2(100 CHAR) NOT NULL,
+  broken_without_piece NUMBER(16,0) NOT NULL CHECK (broken_without_piece >= 0),
+  fissure NUMBER(16,0) NOT NULL CHECK (fissure >= 0),
+  sharp_burr NUMBER(16,0) NOT NULL CHECK (sharp_burr >= 0),
+  stain NUMBER(16,0) NOT NULL CHECK (stain >= 0),
+  other NUMBER(16,0) NOT NULL CHECK (other >= 0),
+  broken_with_piece NUMBER(16,0) NOT NULL CHECK (broken_with_piece >= 0),
+  uploaded_by VARCHAR2(36 CHAR) NOT NULL REFERENCES users(id),
+  uploaded_at VARCHAR2(30 CHAR) NOT NULL,
+  source_name VARCHAR2(100 CHAR) NOT NULL,
+  CONSTRAINT pk_quality_piece_details PRIMARY KEY (report_date, piece)
 );
-CREATE TABLE trabajo_diario_operario (
-  id_operario VARCHAR2(50) NOT NULL REFERENCES operarios(id_operario),
-  fecha VARCHAR2(10) NOT NULL,
-  horas_trabajadas NUMBER(10,2) NOT NULL CHECK (horas_trabajadas > 0),
-  PRIMARY KEY (id_operario, fecha)
-);
-CREATE TABLE cajas (
-  codigo VARCHAR2(100) PRIMARY KEY,
-  fecha VARCHAR2(10) NOT NULL,
-  id_operario VARCHAR2(50) NOT NULL,
-  FOREIGN KEY (id_operario, fecha)
-    REFERENCES trabajo_diario_operario(id_operario, fecha)
-);
-CREATE INDEX idx_cajas_fecha ON cajas(fecha);
-CREATE TABLE composicion_caja (
-  codigo_caja VARCHAR2(100) NOT NULL REFERENCES cajas(codigo),
-  momento VARCHAR2(10) NOT NULL CHECK (momento IN ('inicial', 'cierre')),
-  optimas NUMBER(2) NOT NULL CHECK (optimas BETWEEN 0 AND 20),
-  PRIMARY KEY (codigo_caja, momento)
-);
-CREATE TABLE detalle_composicion (
-  codigo_caja VARCHAR2(100) NOT NULL,
-  momento VARCHAR2(10) NOT NULL,
-  id_clasificacion VARCHAR2(20) NOT NULL REFERENCES clasificaciones(id_clasificacion),
-  cantidad NUMBER(2) NOT NULL CHECK (cantidad BETWEEN 1 AND 20),
-  PRIMARY KEY (codigo_caja, momento, id_clasificacion),
-  FOREIGN KEY (codigo_caja, momento)
-    REFERENCES composicion_caja(codigo_caja, momento)
-);
+CREATE INDEX idx_quality_piece_details_date ON quality_piece_details(report_date);

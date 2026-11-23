@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateBoxControlBatch } from './box-control.js';
@@ -100,5 +100,22 @@ test('SQLite guarda ambas hojas atómicamente y rechaza bases antiguas', async (
     const old = new DatabaseSync(join(dir, 'old.db'));
     old.exec('PRAGMA user_version = 2'); old.close();
     assert.throws(() => createSqliteRepository(join(dir, 'old.db')), /base SQLite nueva/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('el script SQL crea una base vacía que la aplicación reconoce', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bellia-schema-'));
+  const path = join(dir, 'bellia.db');
+  try {
+    const db = new DatabaseSync(path);
+    db.exec(readFileSync(new URL('./db/schema.sqlite.sql', import.meta.url), 'utf8'));
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 3);
+    assert.deepEqual(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+      .all().map(row => row.name), ['quality_piece_details', 'quality_table_days', 'sessions', 'users']);
+    db.close();
+    const repo = createSqliteRepository(path);
+    await repo.createUser(user);
+    assert.equal((await repo.getUserByEmail(user.email)).id, user.id);
+    await repo.close();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

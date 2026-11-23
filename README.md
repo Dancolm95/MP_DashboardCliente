@@ -1,6 +1,6 @@
 # MP Dashboard Cliente · Bellia
 
-Dashboard de control de calidad para Bellia, construido con React, Express y SQLite. Esta rama usa una base propia y no modifica la base del dashboard anterior. Conserva el acceso de administrador y visualizador: solo el administrador puede importar Excel y gestionar visualizadores.
+Dashboard de control de calidad para Bellia, construido con React, Express y SQLite u Oracle. Usa una base propia y no modifica la base del dashboard anterior. Conserva el acceso de administrador y visualizador: solo el administrador puede importar Excel y gestionar visualizadores.
 
 ## Iniciar
 
@@ -13,6 +13,20 @@ npm run dev
 ```
 
 La aplicación se abre en `http://127.0.0.1:5173`. `BELLIA_SQLITE_PATH` indica la base de esta rama; por defecto se usa `data/bellia.db`. El antiguo `SQLITE_PATH` no se usa. No apuntes Bellia a una base del dashboard anterior: si detecta un esquema incompatible, se detiene sin migrar sus datos.
+
+## Script de estructura SQLite
+
+[El script SQL](server/db/schema.sqlite.sql) crea las tablas e índices de Bellia y establece la versión de esquema que comprueba la aplicación. Para entregarlo o ejecutarlo manualmente, usa **una base nueva y vacía** en almacenamiento persistente:
+
+```bash
+sqlite3 -bail /ruta/persistente/bellia.db < server/db/schema.sqlite.sql
+```
+
+Configura `BELLIA_SQLITE_PATH` con esa misma ruta. El script solo crea la estructura: `npm run seed` crea el administrador con las credenciales de `.env`, y las jornadas se importan desde la aplicación. También puedes omitir el paso manual: la aplicación ejecuta el mismo script al abrir una base vacía.
+
+## Script de estructura Oracle
+
+[El esquema Oracle](server/db/schema.oracle.sql) crea las mismas entidades de Bellia en un **esquema Oracle nuevo y vacío**. Debe ejecutarlo el responsable de Oracle antes de iniciar la aplicación; no migra la estructura antigua. Configura `DATABASE_ADAPTER=oracle`, `ORACLE_USER`, `ORACLE_PASSWORD` y `ORACLE_CONNECT_STRING`, luego ejecuta `npm run seed` para crear el administrador. Oracle no genera sus tablas automáticamente al arrancar.
 
 ## Reglas del dashboard
 
@@ -45,7 +59,7 @@ Los filtros `Desde` y `Hasta` establecen un rango inclusivo. `Solo día` fija am
 
 `POST /api/uploads` requiere administrador y el archivo binario con `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`. Devuelve `recordCount`, `detailCount` y `warningDates`. Sin sesión responde 401; sin permiso, 403; entrada inválida, 400; duplicado, 409. La carga de ambas hojas se guarda en una sola transacción.
 
-El adaptador Oracle y su esquema antiguo permanecen como referencia, pero las rutas de calidad Bellia responden 503 cuando se selecciona Oracle.
+Los adaptadores SQLite y Oracle usan el mismo modelo Bellia y exponen las mismas rutas. Las jornadas y el detalle se importan juntos en una transacción.
 
 ## Verificación
 

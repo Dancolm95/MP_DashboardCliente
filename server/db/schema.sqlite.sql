@@ -1,3 +1,7 @@
+-- Bellia, esquema SQLite v3. Ejecutar solamente sobre una base nueva y vacía.
+-- Ejemplo: sqlite3 -bail /ruta/persistente/bellia.db < server/db/schema.sqlite.sql
+BEGIN IMMEDIATE;
+
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
@@ -43,3 +47,6 @@ CREATE TABLE IF NOT EXISTS quality_piece_details (
   PRIMARY KEY (report_date, piece)
 ) STRICT;
 CREATE INDEX IF NOT EXISTS idx_quality_piece_details_date ON quality_piece_details(report_date);
+
+PRAGMA user_version = 3;
+COMMIT;
