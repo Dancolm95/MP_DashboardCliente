@@ -15,8 +15,7 @@ import {
   ArrowRight,
   Database,
   ShieldCheck,
-  Trash2,
-  TrendingUp
+  Trash2
 } from 'lucide-react';
 import './style.css';
 import { QualityContent } from './quality-dashboard.jsx';
@@ -56,7 +55,7 @@ function App() {
   const [dashboard, setDashboard] = useState(null);
   const [from, setFrom] = useState(monthAgo());
   const [to, setTo] = useState(today());
-  const [operator, setOperator] = useState('');
+  const [table, setTable] = useState('');
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -72,7 +71,7 @@ function App() {
     setPage('overview');
     setFrom(monthAgo());
     setTo(today());
-    setOperator('');
+    setTable('');
     setLoading(false);
     setNotice(null);
   };
@@ -100,7 +99,7 @@ function App() {
     setLoading(true);
     setDashboard(null);
     api(
-      `/dashboard?from=${from}&to=${to}&operator=${encodeURIComponent(operator)}`
+      `/dashboard?from=${from}&to=${to}&table=${encodeURIComponent(table)}`
     )
       .then(data => {
         if (current()) {
@@ -119,11 +118,15 @@ function App() {
   };
   useEffect(() => {
     if (user) reload();
-  }, [user, from, to, operator]);
+  }, [user, from, to, table]);
   const setTab = next => {
     setPage(next);
     setNotice(null);
     setMobileOpen(false);
+  };
+  const selectDay = date => {
+    setFrom(date || monthAgo());
+    setTo(date || today());
   };
   const logout = async () => {
     await api('/auth/logout', { method: 'POST' }).catch(() => {});
@@ -139,9 +142,8 @@ function App() {
   if (!user) return <Login onLogin={setUser} />;
   const nav = [
     { id: 'overview', label: 'Resumen', icon: LayoutDashboard },
-    { id: 'productivity', label: 'Productividad', icon: TrendingUp },
     { id: 'records', label: 'Control diario', icon: Table2 },
-    { id: 'classifications', label: 'Clasificaciones', icon: AlertCircle },
+    { id: 'defects', label: 'Detalle de fallas', icon: AlertCircle },
     ...(user.role === 'admin'
       ? [
           { id: 'upload', label: 'Cargar Excel', icon: UploadCloud },
@@ -226,7 +228,7 @@ function App() {
           {notice && (
             <div className={`notice ${notice.type}`}>
               <span>
-                {notice.type === 'error' ? (
+                {notice.type === 'error' || notice.type === 'warning' ? (
                   <AlertCircle size={18} />
                 ) : (
                   <CircleCheck size={18} />
@@ -238,7 +240,7 @@ function App() {
               </button>
             </div>
           )}
-          {['overview', 'productivity', 'records', 'classifications'].includes(
+          {['overview', 'records', 'defects'].includes(
             page
           ) && (
             <QualityContent
@@ -249,20 +251,21 @@ function App() {
               to={to}
               setFrom={setFrom}
               setTo={setTo}
-              operator={operator}
-              setOperator={setOperator}
+              onSelectDay={selectDay}
+              table={table}
+              setTable={setTable}
               onNavigate={setTab}
               isAdmin={user.role === 'admin'}
             />
           )}
           {page === 'upload' && (
             <UploadPage
-              onSuccess={message => {
+              onSuccess={result => {
                 reload();
                 setTab('overview');
                 setNotice({
-                  type: 'success',
-                  text: message
+                  type: result.warning ? 'warning' : 'success',
+                  text: result.text
                 });
               }}
             />
@@ -411,18 +414,18 @@ function Login({ onLogin }) {
 function FileFormat() {
   return (
     <div>
-      <strong>Una fila por operario y fecha</strong>
+      <strong>Una fila por mesa y fecha</strong>
       <p>
-        Columnas obligatorias: Fecha, Operario, Horas trabajadas, Cajas
-        aprobadas, Cajas bloqueadas, Tolerado, Menor, Mayor y Crítico.
+        CONTROL_DIARIO: Fecha, Mesa, Personal Operativo, Horas trabajadas,
+        Cajas aprobadas y Cajas bloqueadas.
       </p>
       <p>
-        Fecha: AAAA-MM-DD o fecha Excel. Las cuatro clasificaciones cuentan
-        unidades; usa 0 cuando no haya observadas. Cada caja tiene 20 unidades.
+        Detalle es opcional. Si se incluye, registra sets bloqueados por fecha,
+        tipo de pieza y causa de origen o no origen. Las categorías vacías cuentan como 0.
       </p>
       <p>
-        Inspeccionadas = aprobadas + bloqueadas. Una jornada ya cargada rechaza
-        todo el archivo. Máximo 3000 jornadas.
+        Cada jornada requiere entre 8 y 24 horas. La meta por mesa es 100 cajas
+        inspeccionadas. Cada caja equivale a 2 sets. Un registro duplicado rechaza todo el archivo.
       </p>
     </div>
   );
@@ -447,9 +450,11 @@ function UploadPage({ onSuccess }) {
         },
         body: file
       });
-      onSuccess(
-        `${data.recordCount} jornadas de operario cargadas correctamente.`
-      );
+      onSuccess({
+        text: `${data.recordCount} jornadas de mesa y ${data.detailCount} filas de detalle cargadas correctamente.`
+          + (data.warningDates.length ? ` Advertencia: el detalle no coincide con las cajas bloqueadas × 2 en ${data.warningDates.join(', ')}.` : ''),
+        warning: data.warningDates.length > 0,
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -473,7 +478,7 @@ function UploadPage({ onSuccess }) {
           <div className="section-head">
             <div>
               <h2>Subir archivo Excel</h2>
-              <p>Se leerá la hoja CONTROL_DIARIO con el formato Calidad V2.</p>
+              <p>Se leerá CONTROL_DIARIO y, si existe, la hoja Detalle.</p>
             </div>
           </div>
           <div

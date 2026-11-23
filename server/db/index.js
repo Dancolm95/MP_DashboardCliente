@@ -6,7 +6,7 @@ export async function createRepository(config = process.env) {
   const adapter = config.DATABASE_ADAPTER || 'sqlite';
   if (adapter === 'sqlite') {
     const { createSqliteRepository } = await import('./sqlite.js');
-    return createSqliteRepository(config.SQLITE_PATH || './data/dashboard.db');
+    return createSqliteRepository(config.BELLIA_SQLITE_PATH || './data/bellia.db');
   }
   if (adapter === 'oracle') {
     const { createOracleRepository } = await import('./oracle.js');

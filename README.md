@@ -1,16 +1,10 @@
-# MP Dashboard Cliente · Calidad V2
+# MP Dashboard Cliente · Bellia
 
-Prototipo de control de calidad en React, Express y SQLite. Registra **un consolidado por operario y fecha de jornada**, sin códigos individuales de caja. Conserva la identidad MP360 y los roles administrador/visualizador.
+Dashboard de control de calidad para Bellia, construido con React, Express y SQLite. Esta rama usa una base propia y no modifica la base del dashboard anterior. Conserva el acceso de administrador y visualizador: solo el administrador puede importar Excel y gestionar visualizadores.
 
 ## Iniciar
 
-Requiere Node.js 22.13 o superior.
-
-```bash
-cp .env.example .env
-```
-
-Configura `DATABASE_ADAPTER=sqlite` y reemplaza `ADMIN_PASSWORD` con una contraseña local. Después ejecuta:
+Requiere Node.js 22.13 o superior. Copia `.env.example` a `.env` y configura `ADMIN_EMAIL` y `ADMIN_PASSWORD`. Luego ejecuta:
 
 ```bash
 npm install
@@ -18,60 +12,40 @@ npm run seed
 npm run dev
 ```
 
-Abre `http://127.0.0.1:5173`. `seed` crea el administrador si no existe; no cambia su contraseña ni añade datos ficticios al dashboard. El administrador importa Excel y administra cuentas de visualización. Un visualizador consulta las cuatro vistas y sus filtros. Eliminar su cuenta invalida sus sesiones; la cuenta administradora no se puede eliminar. No se añaden roles nuevos.
+La aplicación se abre en `http://127.0.0.1:5173`. `BELLIA_SQLITE_PATH` indica la base de esta rama; por defecto se usa `data/bellia.db`. El antiguo `SQLITE_PATH` no se usa. No apuntes Bellia a una base del dashboard anterior: si detecta un esquema incompatible, se detiene sin migrar sus datos.
 
-El login admite cinco intentos por IP en 15 minutos; el contador se guarda en memoria. Actualizar la pestaña conserva el acceso; al abrir la aplicación en una pestaña nueva se solicita iniciar sesión y se revoca la sesión anterior. La cookie no tiene persistencia entre sesiones del navegador. Algunos navegadores restauran el almacenamiento de una pestaña al usar «Reabrir pestaña cerrada»; en ese caso también pueden restaurar el acceso. La API verifica sesión y rol antes de aceptar una importación.
+## Reglas del dashboard
 
-La sesión vence como máximo **12 horas después del login** o tras **1 hora sin peticiones autenticadas**, lo que ocurra primero. Consultar datos o recargar una pestaña activa reinicia únicamente el plazo de inactividad; no prolonga las 12 horas. Dejar la pestaña abierta no cuenta como actividad. El servidor rechaza la siguiente petición de una sesión vencida y la interfaz vuelve al login. SQLite guarda la última actividad para mantener ambos límites aunque el servidor se reinicie. Las sesiones anteriores sin este dato requieren iniciar sesión nuevamente.
-
-## Reglas del consolidado
-
-- Jornada = fecha + identificador de operario. Usa siempre el mismo identificador; se distinguen mayúsculas/minúsculas. No hay desglose por caja, lote, producto ni turno.
-- Cada caja contiene **20 unidades**. Inspeccionadas = aprobadas + bloqueadas.
-- Tolerado, Menor, Mayor y Crítico cuentan **unidades observadas**, en clasificaciones excluyentes: cada unidad se cuenta una sola vez. Todas implican bloqueo, incluido Tolerado.
-- Cada caja bloqueada tiene entre 1 y 20 unidades observadas. Por tanto: bloqueadas ≤ suma de clasificaciones ≤ bloqueadas × 20. Una caja aprobada no tiene unidades observadas.
-- Cajas y unidades son enteros no negativos. Las horas son mayores que 0 y como máximo 24; admiten decimales. Una jornada trabajada sin inspecciones puede tener todas sus cantidades en 0.
-- Productividad individual = suma de cajas inspeccionadas del operario ÷ suma de sus horas trabajadas. La productividad general usa todas las cajas y todas las horas seleccionadas; no promedia tasas individuales.
-- Horas-persona acumuladas = suma de las horas registradas por cada operario y día. El número de operarios del periodo cuenta personas distintas, aunque no trabajen todos los días; por eso no se multiplican operarios × días para obtener las horas.
-- Días con registros = cantidad de fechas distintas con al menos un consolidado de operario dentro de los filtros. Varios operarios en un mismo día cuentan como un solo día; las fechas sin registros no cuentan.
-- Aprobación = aprobadas ÷ inspeccionadas × 100. Sin inspecciones, las tasas son 0.
+- Una jornada es una combinación única de fecha y mesa. `Personal Operativo` es una cantidad por jornada, no identifica personas.
+- Cajas inspeccionadas = cajas aprobadas + cajas bloqueadas. Sets totales = cajas inspeccionadas × 2. La vista muestra el total de sets, sin desglose de sets aprobados y bloqueados.
+- Una mesa cumple la meta cuando inspecciona al menos 50 cajas por cada operario asignado a esa jornada, aunque registre más de 8 horas. El cumplimiento del periodo es cajas inspeccionadas ÷ cajas requeridas × 100; puede superar el 100 %. La productividad es cajas inspeccionadas ÷ horas de mesa; el personal operativo no modifica ese divisor.
+- El detalle distribuye los sets bloqueados por fecha, pieza y una sola causa: origen (proveedor) o no origen (transporte o manipulación). No identifica la mesa. Si la suma diaria del detalle difiere de cajas bloqueadas × 2, se avisa sin rechazar la carga.
 
 ## Importar Excel
 
-Sube un `.xlsx` de hasta **2 MB** desde **Cargar Excel**. La única hoja requerida es `CONTROL_DIARIO`, con los encabezados en su primera fila y hasta 3000 jornadas. El orden de las columnas puede variar.
+El administrador carga un `.xlsx` de hasta 2 MB. `CONTROL_DIARIO` es obligatorio y admite hasta 3000 jornadas. Los encabezados pueden cambiar de orden:
 
-| Fecha | Operario | Horas trabajadas | Cajas aprobadas | Cajas bloqueadas | Tolerado | Menor | Mayor | Crítico |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 2026-11-18 | Ana | 2 | 8 | 2 | 1 | 2 | 0 | 1 |
-| 2026-11-18 | Luis | 2 | 19 | 1 | 0 | 0 | 1 | 0 |
-| 2026-11-19 | Ana | 6 | 27 | 3 | 2 | 1 | 2 | 1 |
+| Fecha | Mesa | Personal Operativo | Horas trabajadas | Cajas aprobadas | Cajas bloqueadas |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 2026-11-20 | Mesa 1 | 4 | 8 | 70 | 8 |
 
-Todas las celdas requeridas deben tener valor; usa `0` para cantidades vacías. Fecha admite `AAAA-MM-DD` o fechas nativas de Excel (sistemas 1900 y 1904). Las fórmulas necesitan un resultado guardado por Excel. Si se incluye la columna opcional `Cajas inspeccionadas`, debe coincidir con aprobadas + bloqueadas.
+`Detalle` es opcional y admite hasta 3000 filas. Sus columnas son `Fecha`, `Tipo de pieza`, `Roto/quiñado SIN pedazo en caja`, `Fisura`, `Rebaba cortante`, `Mancha`, `Otros`, `Total Origen`, `Roto/quiñado CON pedazo en caja` y `Total No Origen`. Las categorías vacías cuentan como cero. Los totales deben coincidir con sus categorías; las fórmulas requieren un resultado guardado. Las fechas admiten `AAAA-MM-DD` o fechas nativas de Excel.
 
-Una jornada duplicada dentro del archivo o ya guardada rechaza **todo el archivo**, sin sobreescrituras ni cargas parciales. La pantalla informa los errores con su fila. El formato V1 por lote no se convierte automáticamente: no contiene la atribución por operario necesaria. `INCIDENCIAS` y `RESUMEN_KPI` ya no se consumen; los indicadores se calculan desde el consolidado.
-
-El ejemplo produce 60 cajas inspeccionadas, 54 aprobadas, 6 bloqueadas, 1200 unidades inspeccionadas y 11 observadas (3 Tolerado, 3 Menor, 3 Mayor, 2 Crítico). Ana: 40/8 = **5 cajas/h**; Luis: 20/2 = **10 cajas/h**; general: 60/10 = **6 cajas/h**.
+Las cajas deben ser enteros no negativos y cada jornada debe tener al menos un operario; las horas deben estar entre 8 y 24. Un duplicado de fecha + mesa o fecha + pieza, dentro del archivo o ya guardado, rechaza toda la carga. Cada fecha de `Detalle` debe aparecer en `CONTROL_DIARIO` del mismo archivo. Si falta la hoja `Detalle`, no se compara su total con las cajas bloqueadas.
 
 ## Vistas y API
 
-- **Resumen general:** indicadores, inspección diaria, aprobación, productividad y últimas jornadas.
-- **Productividad:** comparación y totales por operario.
-- **Control diario:** consolidado por fecha/operario con horas, cajas y productividad.
-- **Clasificaciones:** cantidades y porcentajes de unidades observadas y detalle por jornada.
+- **Resumen:** porcentaje de cajas inspeccionadas frente a cajas requeridas según el personal de las mesas y jornadas filtradas, cajas aprobadas/bloqueadas, sets totales e inspección diaria. Muestra las cinco jornadas más recientes; todas están en Control diario.
+- **Control diario:** jornadas con personal, horas, cajas inspeccionadas y requeridas, sets totales y estado de la meta.
+- **Detalle de fallas:** sets bloqueados por origen/no origen, causa, fecha y pieza. Solo aplica el filtro de fechas; el filtro de mesa no afecta esta vista.
 
-Las cuatro vistas comparten los filtros de fechas y operario, así como los estados de carga, error y ausencia de datos.
+`GET /api/dashboard?from=2026-11-01&to=2026-11-30&table=Mesa%201` requiere sesión. Devuelve `summary`, `daily`, `records`, `defects` y `options.tables`. `summary` incluye `required`, `attainmentRate` y `targetMet`; cada elemento de `records` incluye `required` y `targetMet`. La consulta de `defects` usa solo las fechas aunque se envíe `table`.
 
-`GET /api/dashboard?from=2026-11-01&to=2026-11-30&operator=Ana` requiere sesión y devuelve `summary`, `daily`, `operators`, `classifications`, `records` y `options.operators`. El filtro `operator` es opcional. Los antiguos filtros producto/turno ya no forman parte del contrato V2.
+Los filtros `Desde` y `Hasta` establecen un rango inclusivo. `Solo día` fija ambas fechas a la elegida; al borrar ese valor se restablecen los últimos 30 días.
 
-`POST /api/uploads` requiere administrador, recibe el archivo binario con `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` y devuelve `{ "recordCount": 3 }`. Una entrada inválida devuelve 400; una jornada existente, 409; sin sesión, 401; sin permiso, 403. Las rutas de autenticación y usuarios conservan su contrato.
+`POST /api/uploads` requiere administrador y el archivo binario con `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`. Devuelve `recordCount`, `detailCount` y `warningDates`. Sin sesión responde 401; sin permiso, 403; entrada inválida, 400; duplicado, 409. La carga de ambas hojas se guarda en una sola transacción.
 
-## SQLite y alcance Oracle
-
-`SQLITE_PATH` indica la base local (por defecto `data/dashboard.db`, excluida de Git). Al abrir una base del prototipo anterior, la migración transaccional a `user_version=2` **recrea únicamente las tablas de calidad**: elimina los antiguos registros por lote y las tablas de cajas individuales. **Conserva usuarios y sesiones.** Los datos anteriores no se transforman. Las aperturas siguientes conservan Calidad V2.
-
-`quality_workdays` guarda fecha/operario como clave única, horas, cajas aprobadas/bloqueadas, las cuatro cantidades y procedencia de la carga. SQLite aplica tipos estrictos, claves foráneas y restricciones de cantidades, fechas, horas y capacidad, además de la validación en el servicio.
-
-El adaptador y el esquema Oracle preexistentes se conservan como referencia V1 y no se migran en esta entrega. Las rutas de calidad devuelven 503 con un mensaje explícito si se selecciona Oracle. Para bases Oracle existentes, el DBA debe añadir `last_activity_at VARCHAR2(30)` a `sessions` antes de usar la nueva política. Adaptar y validar Oracle contra una instancia real queda pendiente y fuera de este alcance SQLite.
+El adaptador Oracle y su esquema antiguo permanecen como referencia, pero las rutas de calidad Bellia responden 503 cuando se selecciona Oracle.
 
 ## Verificación
 
@@ -80,6 +54,4 @@ npm test
 npm run build
 ```
 
-Las pruebas cubren cálculos con el ejemplo anterior, filtros por fecha/operario, ausencia de datos, clasificación Tolerado como bloqueo, validación de capacidades, importación hasta los indicadores, carga atómica, duplicados, fechas Excel, migración y reapertura, sesión, permisos y revocación de acceso.
-
-La verificación de navegador se realiza con una base temporal en memoria: acceso administrador/visualizador, carga de un Excel de tres jornadas, cuatro vistas, filtros y diseño móvil. No requiere modificar los datos locales ni guardar credenciales de prueba en el repositorio.
+Las pruebas cubren cálculos de cajas, sets, meta, filtros, advertencias, importación atómica, duplicados, sesión y permisos. Con el Excel real de Bellia, las 8 jornadas suman 693 cajas inspeccionadas, 1300 requeridas, 1386 sets totales y 1 jornada que alcanza su meta.

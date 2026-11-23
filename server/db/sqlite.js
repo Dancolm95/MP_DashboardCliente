@@ -8,28 +8,15 @@ export function createSqliteRepository(path) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
-  // V1 no contiene la atribución necesaria para convertir sus totales a operarios.
-  // Se recrean solo los datos de calidad del prototipo; usuarios y sesiones se conservan.
   const version = db.prepare('PRAGMA user_version').get().user_version;
-  if (version > 2) { db.close(); throw new Error('Versión SQLite no compatible.'); }
+  if (version !== 0 && version !== 3) { db.close(); throw new Error('Bellia requiere una base SQLite nueva.'); }
   db.exec('BEGIN IMMEDIATE');
   try {
-    if (version < 2) db.exec(`
-      DROP TABLE IF EXISTS detalle_composicion;
-      DROP TABLE IF EXISTS composicion_caja;
-      DROP TABLE IF EXISTS cajas;
-      DROP TABLE IF EXISTS trabajo_diario_operario;
-      DROP TABLE IF EXISTS operarios;
-      DROP TABLE IF EXISTS clasificaciones;
-      DROP TABLE IF EXISTS quality_incidents;
-      DROP TABLE IF EXISTS quality_records;
-    `);
-    db.exec(readFileSync(new URL('./schema.sqlite.sql', import.meta.url), 'utf8'));
-    // Las sesiones anteriores no tienen actividad registrada y exigirán un nuevo login.
-    if (!db.prepare('PRAGMA table_info(sessions)').all().some(column => column.name === 'last_activity_at')) {
-      db.exec('ALTER TABLE sessions ADD COLUMN last_activity_at TEXT');
+    if (version === 0 && db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1").get()) {
+      throw new Error('Bellia requiere una base SQLite nueva.');
     }
-    db.exec('PRAGMA user_version = 2; COMMIT');
+    db.exec(readFileSync(new URL('./schema.sqlite.sql', import.meta.url), 'utf8'));
+    db.exec('PRAGMA user_version = 3; COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
     db.close();
@@ -37,7 +24,7 @@ export function createSqliteRepository(path) {
   }
   const userFields = 'id, email, name, password_hash AS passwordHash, role, created_at AS createdAt';
   const repo = {
-    qualityVersion: 2,
+    qualityVersion: 3,
     async getUserByEmail(email) {
       return db.prepare(`SELECT ${userFields} FROM users WHERE email = ?`).get(email) || null;
     },
@@ -74,28 +61,40 @@ export function createSqliteRepository(path) {
       db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);
     },
     async listQualityRecords(from, to) {
-      return db.prepare(`SELECT operator_id AS operatorId, report_date AS date,
-        hours, approved, blocked, tolerated, minor, major, critical,
-        source_name AS sourceName, uploaded_at AS uploadedAt FROM quality_workdays
-        WHERE report_date BETWEEN ? AND ? ORDER BY report_date, operator_id`).all(from, to);
+      return db.prepare(`SELECT table_name AS "table", report_date AS date,
+        staff, hours, approved, blocked, detail_provided AS detailProvided,
+        source_name AS sourceName, uploaded_at AS uploadedAt FROM quality_table_days
+        WHERE report_date BETWEEN ? AND ? ORDER BY report_date, table_name`).all(from, to);
     },
-    async insertQualityBatch({ records, uploadedBy, sourceName }) {
-      validateBoxControlBatch(records);
+    async listQualityDetails(from, to) {
+      return db.prepare(`SELECT report_date AS date, piece,
+        broken_without_piece AS brokenWithoutPiece, fissure, sharp_burr AS sharpBurr,
+        stain, other, broken_with_piece AS brokenWithPiece
+        FROM quality_piece_details WHERE report_date BETWEEN ? AND ?
+        ORDER BY report_date, piece`).all(from, to);
+    },
+    async insertQualityBatch({ records, details = [], detailProvided = false, uploadedBy, sourceName }) {
+      validateBoxControlBatch(records, details);
       const uploadedAt = new Date().toISOString();
       db.exec('BEGIN IMMEDIATE');
       try {
-        const insert = db.prepare(`INSERT INTO quality_workdays
-          (operator_id, report_date, hours, approved, blocked, tolerated, minor,
-          major, critical, uploaded_by, uploaded_at, source_name)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-        for (const row of records) insert.run(row.operatorId, row.date, row.hours,
-          row.approved, row.blocked, row.tolerated, row.minor, row.major, row.critical,
+        const insert = db.prepare(`INSERT INTO quality_table_days
+          (table_name, report_date, staff, hours, approved, blocked, detail_provided,
+          uploaded_by, uploaded_at, source_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        for (const row of records) insert.run(row.table, row.date, row.staff, row.hours,
+          row.approved, row.blocked, Number(detailProvided), uploadedBy, uploadedAt, sourceName);
+        const insertDetail = db.prepare(`INSERT INTO quality_piece_details
+          (report_date, piece, broken_without_piece, fissure, sharp_burr, stain,
+          other, broken_with_piece, uploaded_by, uploaded_at, source_name)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        for (const row of details) insertDetail.run(row.date, row.piece, row.brokenWithoutPiece,
+          row.fissure, row.sharpBurr, row.stain, row.other, row.brokenWithPiece,
           uploadedBy, uploadedAt, sourceName);
         db.exec('COMMIT');
       } catch (error) {
         db.exec('ROLLBACK');
-        if (error.message?.includes('UNIQUE constraint failed: quality_workdays.')) {
-          throw new DuplicateRecordError('Ya existe un consolidado para ese operario y fecha. No se importó ninguna fila.');
+        if (error.message?.includes('UNIQUE constraint failed: quality_')) {
+          throw new DuplicateRecordError('Ya existe una jornada de mesa o un detalle de pieza para esa fecha. No se importó ninguna fila.');
         }
         throw error;
       }

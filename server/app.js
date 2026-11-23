@@ -98,16 +98,17 @@ export function createApp(repo, { now = () => Date.now() } = {}) {
     res.json({ ok: true });
   }));
 
-  const requireQualityV2 = (_req, _res, next) => {
-    if (repo.qualityVersion !== 2) return next(Object.assign(new Error('Calidad V2 requiere el adaptador SQLite.'), { status: 503 }));
+  const requireBellia = (_req, _res, next) => {
+    if (repo.qualityVersion !== 3) return next(Object.assign(new Error('Bellia requiere el adaptador SQLite.'), { status: 503 }));
     next();
   };
-  app.get('/api/dashboard', requireAuth, requireQualityV2, asyncRoute(async (req, res) => {
+  app.get('/api/dashboard', requireAuth, requireBellia, asyncRoute(async (req, res) => {
     const to = String(req.query.to || new Date().toISOString().slice(0, 10));
     const from = String(req.query.from || new Date(Date.now() - 29 * DAY).toISOString().slice(0, 10));
     if (!validDate(from) || !validDate(to) || from > to) bad('Selecciona un rango de fechas válido.');
     const records = await repo.listQualityRecords(from, to);
-    res.json(buildDashboard(records, { operator: String(req.query.operator || '') }));
+    const details = await repo.listQualityDetails(from, to);
+    res.json(buildDashboard(records, details, { table: String(req.query.table || '') }));
   }));
   app.get('/api/users', requireAuth, requireAdmin, asyncRoute(async (_req, res) => res.json({ users: await repo.listUsers() })));
   app.post('/api/users', requireAuth, requireAdmin, asyncRoute(async (req, res) => {
@@ -119,7 +120,7 @@ export function createApp(repo, { now = () => Date.now() } = {}) {
     }
     if (name.length < 2 || name.length > 100 || !emailOk(email)
       || email.length > 255 || password.length < 8) {
-      bad('Ingresa nombre, correo válido y contraseña de al menos 10 caracteres.');
+      bad('Ingresa nombre, correo válido y contraseña de al menos 08 caracteres.');
     }
     if (await repo.getUserByEmail(email)) bad('Ya existe una cuenta con ese correo.', 409);
     const user = {
@@ -146,16 +147,21 @@ export function createApp(repo, { now = () => Date.now() } = {}) {
     if (!(await repo.deleteViewer(id))) bad('La cuenta no existe.', 404);
     res.status(204).end();
   }));
-  app.post('/api/uploads', requireAuth, requireAdmin, requireQualityV2,
+  app.post('/api/uploads', requireAuth, requireAdmin, requireBellia,
     express.raw({ type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', limit: '2mb' }),
     asyncRoute(async (req, res) => {
       if (!Buffer.isBuffer(req.body) || !req.body.length) bad('Selecciona un archivo .xlsx válido.');
-      const { records } = await parseQualityWorkbook(req.body);
+      const { records, details, detailProvided } = await parseQualityWorkbook(req.body);
       const sourceName = String(req.headers['x-file-name'] || 'indicadores.xlsx')
         .replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 100);
-      await repo.insertQualityBatch({ records, uploadedBy: req.user.id, sourceName });
+      await repo.insertQualityBatch({ records, details, detailProvided, uploadedBy: req.user.id, sourceName });
+      const warningDates = detailProvided
+        ? buildDashboard(records.map(row => ({ ...row, detailProvided: 1 })), details).defects.warnings
+        : [];
       res.status(201).json({
         recordCount: records.length,
+        detailCount: details.length,
+        warningDates,
       });
     }));
 

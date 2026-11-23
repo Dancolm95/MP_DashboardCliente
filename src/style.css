@@ -646,6 +646,11 @@ tr:last-child td {
   color: #13835d;
 }
 
+.notice.warning {
+  background: #fff5e7;
+  color: #9c5d18;
+}
+
 .notice.error,.form-error {
   background: #fff0ef;
   color: #b94c45;
@@ -1888,7 +1893,43 @@ tr:last-child td {
   }
 }
 
-/* Calidad V2: consolidado por jornada */
+/* Bellia: jornadas por mesa y detalle de sets bloqueados */
+.target-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.8fr);
+  gap: 22px;
+  align-items: center;
+  padding: 20px 24px;
+  border: 1px solid #d9e4f0;
+  border-radius: 14px;
+  background: #fff;
+  color: #244466;
+  box-shadow: 0 5px 16px rgba(22, 71, 119, 0.05);
+}
+.target-hero-eyebrow {
+  display: block;
+  color: #617d99;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.target-hero-number { display: flex; align-items: baseline; gap: 14px; margin-top: 8px; }
+.target-hero-number strong { font: 800 clamp(40px, 5vw, 56px)/1 Manrope, sans-serif; letter-spacing: -2px; color: #1d6796; white-space: nowrap; }
+.target-hero-number span { font-size: 14px; font-weight: 700; line-height: 1.4; }
+.target-hero-goal p { color: #61758e; font-size: 12px; margin: 9px 0 0; }
+.target-hero-result {
+  padding: 13px 16px;
+  border: 1px solid #e2eaf3;
+  border-radius: 10px;
+  background: #f7f9fc;
+}
+.target-hero-result>span { display: block; color: #61758e; font-size: 11px; }
+.target-hero-result strong { display: block; font: 800 25px Manrope, sans-serif; margin-top: 5px; }
+.target-hero-result p { margin: 2px 0 11px; font-size: 12px; }
+.target-hero-track { height: 6px; border-radius: 99px; background: #dfe7f0; overflow: hidden; }
+.target-hero-track span { display: block; height: 100%; border-radius: inherit; background: #ffbe7b; }
+.target-hero-track.is-met span { background: #7ee3b2; }
+.target-hero-result small { display: block; margin-top: 8px; color: #61758e; font-size: 11px; }
 .quality-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .quality-version { flex-shrink: 0; color: #245f91; font-size: 10px; letter-spacing: 1px; font-weight: 800; padding: 11px 14px; border: 1px solid #d9e4f0; border-radius: 10px; background: #f0f5fb; }
 .quality-version span { display: block; margin-top: 5px; color: #637d99; font-size: 11px; letter-spacing: 0; font-weight: 500; }
@@ -1900,35 +1941,24 @@ tr:last-child td {
 .quality-formula strong { font-size: 13px; }
 .quality-formula p { margin: 6px 0 0; font-size: 12px; line-height: 1.7; color: #61758e; }
 .upload-format { margin-bottom: 24px; }
-.operator-list { display: grid; gap: 24px; padding: 4px 0; }
-.operator-heading, .operator-heading>div, .operator-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.operator-heading { font-size: 12px; margin-bottom: 10px; color: #6f8094; }
-.operator-heading strong { color: #284567; }
-.operator-heading b { font: 800 20px Manrope, sans-serif; color: #244d7e; }
-.operator-avatar { display: grid; place-items: center; background: #edf3fc; color: #3869ac; border-radius: 8px; width: 30px; height: 30px; font-weight: 700; }
-.operator-meta { font-size: 11px; color: #7e8fa3; margin-top: 8px; }
-.classification-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-.classification-card { padding: 23px; background: #fff; border: 1px solid #e4eaf2; border-top: 3px solid var(--classification-color); border-radius: 12px; }
-.classification-card>div:first-child { display: flex; align-items: center; gap: 8px; color: var(--classification-color); }
+.classification-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.classification-card { padding: 23px; background: #fff; border: 1px solid #e4eaf2; border-top: 3px solid #3869ac; border-radius: 12px; }
+.classification-card>div:first-child { display: flex; align-items: center; gap: 8px; color: #3869ac; }
 .classification-card h2 { font-size: 14px; flex: 1; margin: 0; }
-.classification-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--classification-color); }
 .classification-card>strong { display: block; font: 800 32px Manrope, sans-serif; margin: 24px 0 16px; color: #244466; }
 .classification-card strong small { font: 500 11px 'DM Sans', sans-serif; color: #8090a6; }
-.classification-track { height: 5px; background: #eff2f6; border-radius: 4px; overflow: hidden; }
-.classification-track i { display: block; height: 100%; background: var(--classification-color); }
-.classification-card p { font-size: 11px; color: #7c8da3; line-height: 1.7; margin: 10px 0 18px; }
-.classification-status { color: var(--classification-color); font-size: 10px; font-weight: 700; }
-.quality-note svg { flex-shrink: 0; }
+.classification-status { color: #3869ac; font-size: 10px; font-weight: 700; }
 .table-scroll:focus-visible { outline: 2px solid #3869ac; outline-offset: 3px; }
 @media (max-width: 1200px) { .classification-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) {
+  .target-hero { grid-template-columns: 1fr; gap: 14px; padding: 18px; }
   .quality-header { align-items: flex-start; flex-direction: column; gap: 12px; }
   .quality-version { display: flex; align-items: center; gap: 12px; }
   .quality-version span { margin-top: 0; }
   .quality-formula { padding: 18px; }
-  .operator-heading b { font-size: 18px; }
 }
 @media (max-width: 420px) {
+  .target-hero-number { flex-wrap: wrap; gap: 6px 12px; }
+  .target-hero-number strong { font-size: 44px; }
   .classification-grid { grid-template-columns: 1fr; }
-  .operator-meta { align-items: flex-start; flex-direction: column; gap: 4px; }
 }
